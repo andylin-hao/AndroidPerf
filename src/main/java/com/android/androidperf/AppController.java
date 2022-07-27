@@ -30,6 +30,8 @@ public class AppController implements Initializable {
     private Button perfBtn;
     @FXML
     private LineChart<Number, Number> lineChartFPS;
+    @FXML
+    private LineChart<Number, Number> lineChartCPU;
     private final HashMap<String, LineChart<Number, Number>> lineChartMap = new HashMap<>();
 
     public Device selectedDevice;
@@ -60,9 +62,12 @@ public class AppController implements Initializable {
         });
         propTable.getColumns().add(nameCol);
         propTable.getColumns().add(valCol);
+        nameCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.38));
+        valCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.62));
 
         // initialize line charts
-        initLineChart(lineChartFPS, "FPS");
+        initLineChart(lineChartFPS, "FPS", 1, 60);
+        initLineChart(lineChartCPU, "CPU", 2, 100);
 
         // set layer list comboBox's event handler
         layerListBox.getSelectionModel().selectedItemProperty().addListener(
@@ -72,9 +77,12 @@ public class AppController implements Initializable {
         updatePromptText();
     }
 
-    private void initLineChart(LineChart<Number, Number> lineChart, String chartName) {
-        XYChart.Series<Number, Number> data = new XYChart.Series<>();
-        lineChart.getData().add(data);
+    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, int numDataSeries, int yBound) {
+        for (int i = 0; i < numDataSeries; i++) {
+            XYChart.Series<Number, Number> data = new XYChart.Series<>();
+            lineChart.getData().add(data);
+        }
+
         lineChart.setAnimated(true);
         lineChart.setTitle(chartName);
 
@@ -86,7 +94,7 @@ public class AppController implements Initializable {
 
         NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
         yAxis.setLowerBound(0);
-        yAxis.setUpperBound(60);
+        yAxis.setUpperBound(yBound);
         yAxis.setTickUnit(10);
         yAxis.setAutoRanging(false);
 
@@ -95,27 +103,31 @@ public class AppController implements Initializable {
         lineChartMap.put(chartName, lineChart);
     }
 
-    public void addDataToChart(String chartName, XYChart.Data<Number, Number> data) {
+    @SafeVarargs
+    public final void addDataToChart(String chartName, XYChart.Data<Number, Number>... dataArrays) {
         LineChart<Number, Number> lineChart = lineChartMap.get(chartName);
 
-        int xVal = data.getXValue().intValue();
-        NumberAxis xAxis = (NumberAxis) lineChart.getXAxis();
-        double xBound = xAxis.getUpperBound();
-        if (xVal > xBound) {
-            xBound = xVal + 15;
-            xAxis.setUpperBound(xBound);
-            xAxis.setTickUnit(xAxis.getTickUnit() + 1);
-        }
+        for (int i = 0; i < dataArrays.length; i++) {
+            var data = dataArrays[i];
+            int xVal = data.getXValue().intValue();
+            NumberAxis xAxis = (NumberAxis) lineChart.getXAxis();
+            double xBound = xAxis.getUpperBound();
+            if (xVal > xBound) {
+                xBound = xVal + 15;
+                xAxis.setUpperBound(xBound);
+                xAxis.setTickUnit(xAxis.getTickUnit() + 1);
+            }
 
-        int yVal = data.getYValue().intValue();
-        NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
-        double yBound = yAxis.getUpperBound();
-        if (yBound < yVal) {
-            yBound = (int) (Math.ceil((yVal / 5.)) * 5);
-            yAxis.setUpperBound(yBound);
-            yAxis.setTickUnit(yBound / 5.);
+            int yVal = data.getYValue().intValue();
+            NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
+            double yBound = yAxis.getUpperBound();
+            if (yBound < yVal) {
+                yBound = (int) (Math.ceil((yVal / 5.)) * 5);
+                yAxis.setUpperBound(yBound);
+                yAxis.setTickUnit(yBound / 5.);
+            }
+            lineChart.getData().get(i).getData().add(data);
         }
-        lineChart.getData().get(0).getData().add(data);
     }
 
     public void handleDeviceListBox() {
@@ -126,6 +138,7 @@ public class AppController implements Initializable {
 
         // register perf services
         selectedDevice.registerService(FPSPerfService.class);
+        selectedDevice.registerService(CPUPerfService.class);
 
         propTable.getItems().clear();
         packageListBox.getItems().clear();

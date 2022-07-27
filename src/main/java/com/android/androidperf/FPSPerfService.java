@@ -13,9 +13,6 @@ public class FPSPerfService extends BasePerfService {
     private Double totalTime = 0.;
     private int numFrames = 0;
 
-    private Future<?> updateTask;
-    private Future<?> dumpTask;
-
     void clearLatencyData() {
         ArrayList<Layer> layers = device.getLayers();
         for (var layer : layers) {
@@ -115,13 +112,6 @@ public class FPSPerfService extends BasePerfService {
     @Override
     void begin() {
         clearLatencyData();
-        updateTask = executorService.scheduleAtFixedRate(this::update, 0, sampleIntervalMilli, TimeUnit.MILLISECONDS);
-        dumpTask = executorService.scheduleAtFixedRate(this::dump, 0, 1000, TimeUnit.MILLISECONDS);
-    }
-
-    @Override
-    void end() {
-        updateTask.cancel(true);
-        dumpTask.cancel(true);
+        super.begin();
     }
 }

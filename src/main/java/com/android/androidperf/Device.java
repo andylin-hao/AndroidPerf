@@ -33,7 +33,8 @@ public class Device {
     private final int cpuCores;
     private final String cpuModel;
     private final ArrayList<String> cpuFrequencies;
-    private final int memSize;
+    private final double memSize;
+    private final double storageSize;
     private final ArrayList<DeviceProp> props = new ArrayList<>();
 
     private final ArrayList<BasePerfService> services = new ArrayList<>();
@@ -74,10 +75,10 @@ public class Device {
             LOGGER.error(String.format("Cannot get SDK version, getprop is %s", versionStr));
         }
         sdkVersion = version;
-        props.add(new DeviceProp("SDK Ver.", String.valueOf(sdkVersion)));
+        props.add(new DeviceProp("SDK Version", String.valueOf(sdkVersion)));
 
         androidVersion = execCmd("getprop ro.build.version.release");
-        props.add(new DeviceProp("Android Ver.", String.valueOf(androidVersion)));
+        props.add(new DeviceProp("Android Version", String.valueOf(androidVersion)));
 
         // acquire CPU info
         info = execCmd("cat /proc/cpuinfo");
@@ -119,6 +120,28 @@ public class Device {
         props.add(new DeviceProp("CPU Frequencies", String.join(", ", cpuFrequencies)));
         props.add(new DeviceProp("ABI List", abiList));
 
+        // acquire memory info
+        info = execCmd("cat /proc/meminfo | grep MemTotal");
+        String[] memInfo = info.split(" +");
+        if (memInfo.length == 3) {
+            memSize = Integer.parseInt(memInfo[1]) / 1024. / 1024.;
+        } else {
+            memSize = 0;
+            LOGGER.warn("Cannot get memory info");
+        }
+        props.add(new DeviceProp("Memory", Math.round(memSize) + " GB"));
+
+        // acquire storage info
+        info = execCmd("df | grep /storage");
+        String[] storageInfo = info.split(" +");
+        if (storageInfo.length == 6) {
+            storageSize = Double.parseDouble(storageInfo[1]) / 1024. / 1024.;
+        } else {
+            storageSize = 0;
+            LOGGER.warn("Cannot get storage info");
+        }
+        props.add(new DeviceProp("Storage", Math.round(storageSize) + " GB"));
+
         // acquire GPU info
         info = execCmd("dumpsys SurfaceFlinger | grep OpenGL");
         String[] glInfo = info.split(", ");
@@ -136,16 +159,6 @@ public class Device {
         props.add(new DeviceProp("GL Vendor", glVendor));
         props.add(new DeviceProp("GL Renderer", glRenderer));
         props.add(new DeviceProp("GL Version", glVersion));
-
-        // acquire memory info
-        info = execCmd("cat /proc/meminfo | grep MemTotal");
-        String[] memInfo = info.split(" *");
-        if (memInfo.length == 3) {
-            memSize = Integer.parseInt(memInfo[1]) / 1024 / 1024;
-        } else {
-            memSize = 0;
-            LOGGER.warn("Cannot get memory info");
-        }
 
         updatePackageList();
     }
