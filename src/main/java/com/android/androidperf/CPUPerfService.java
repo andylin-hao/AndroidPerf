@@ -32,8 +32,8 @@ public class CPUPerfService extends BasePerfService {
         Platform.runLater(() -> device.getController()
                 .addDataToChart(
                         "CPU",
-                        new XYChart.Data<>(dumpTimer, finalProcUsage),
-                        new XYChart.Data<>(dumpTimer, finalTotalUsage))
+                        new XYChart.Data<>(dumpTimer, finalProcUsage / device.getCpuCores()),
+                        new XYChart.Data<>(dumpTimer, finalTotalUsage / device.getCpuCores()))
         );
     }
 
@@ -61,15 +61,5 @@ public class CPUPerfService extends BasePerfService {
     @Override
     void update() {
         dataQueue.add(acquireCPUData());
-    }
-
-    @Override
-    void begin() {
-        super.begin();
-    }
-
-    @Override
-    void end() {
-        super.end();
     }
 }

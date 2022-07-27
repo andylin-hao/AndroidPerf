@@ -21,7 +21,7 @@ public class MainApplication extends Application {
     public void start(Stage stage) throws IOException {
         fxmlLoader = new FXMLLoader(MainApplication.class.getResource("main-view.fxml"));
         Scene scene = new Scene(fxmlLoader.load(), 1024, 768);
-        stage.setTitle("AndroidPerf!");
+        stage.setTitle("AndroidPerf");
         stage.setScene(scene);
         stage.show();
     }

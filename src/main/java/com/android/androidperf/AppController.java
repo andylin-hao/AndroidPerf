@@ -32,6 +32,8 @@ public class AppController implements Initializable {
     private LineChart<Number, Number> lineChartFPS;
     @FXML
     private LineChart<Number, Number> lineChartCPU;
+    @FXML
+    private LineChart<Number, Number> lineChartNetwork;
     private final HashMap<String, LineChart<Number, Number>> lineChartMap = new HashMap<>();
 
     public Device selectedDevice;
@@ -66,8 +68,9 @@ public class AppController implements Initializable {
         valCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.62));
 
         // initialize line charts
-        initLineChart(lineChartFPS, "FPS", 1, 60);
-        initLineChart(lineChartCPU, "CPU", 2, 100);
+        initLineChart(lineChartFPS, "FPS", 1, 60, 10);
+        initLineChart(lineChartCPU, "CPU", 2, 100, 20);
+        initLineChart(lineChartNetwork, "Network", 2, 1000, 100);
 
         // set layer list comboBox's event handler
         layerListBox.getSelectionModel().selectedItemProperty().addListener(
@@ -77,7 +80,7 @@ public class AppController implements Initializable {
         updatePromptText();
     }
 
-    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, int numDataSeries, int yBound) {
+    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, int numDataSeries, int yBound, int yTick) {
         for (int i = 0; i < numDataSeries; i++) {
             XYChart.Series<Number, Number> data = new XYChart.Series<>();
             lineChart.getData().add(data);
@@ -95,7 +98,7 @@ public class AppController implements Initializable {
         NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
         yAxis.setLowerBound(0);
         yAxis.setUpperBound(yBound);
-        yAxis.setTickUnit(10);
+        yAxis.setTickUnit(yTick);
         yAxis.setAutoRanging(false);
 
         lineChart.setLegendVisible(false);
@@ -139,6 +142,7 @@ public class AppController implements Initializable {
         // register perf services
         selectedDevice.registerService(FPSPerfService.class);
         selectedDevice.registerService(CPUPerfService.class);
+        selectedDevice.registerService(NetworkPerfService.class);
 
         propTable.getItems().clear();
         packageListBox.getItems().clear();
