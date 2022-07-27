@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.chart.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
+    <items>
+        <AnchorPane minHeight="0.0" minWidth="0.0">
+            <children>
+                <VBox alignment="TOP_CENTER" layoutX="38.0" layoutY="44.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+                    <children>
+                        <ComboBox fx:id="deviceListBox" maxWidth="1.7976931348623157E308" onAction="#handleDeviceListBox" prefWidth="150">
+                            <VBox.margin>
+                                <Insets left="10.0" right="10.0" top="40.0" />
+                            </VBox.margin></ComboBox>
+                        <ComboBox fx:id="packageListBox" maxWidth="1.7976931348623157E308" onAction="#handlePackageListBox" prefWidth="150.0">
+                            <VBox.margin>
+                                <Insets left="10.0" right="10.0" top="20.0" />
+                            </VBox.margin></ComboBox>
+                  <ComboBox fx:id="layerListBox" maxWidth="1.7976931348623157E308" prefWidth="150.0">
+                     <VBox.margin>
+                        <Insets left="10.0" right="10.0" top="20.0" />
+                     </VBox.margin>
+                  </ComboBox>
+                  <AnchorPane prefHeight="200.0" prefWidth="200.0">
+                     <children>
+                        <TableView fx:id="propTable" maxHeight="1.7976931348623157E308" stylesheets="@table-view.css" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
+                           <columnResizePolicy>
+                              <TableView fx:constant="CONSTRAINED_RESIZE_POLICY" />
+                           </columnResizePolicy>
+                        </TableView>
+                     </children>
+                     <VBox.margin>
+                        <Insets top="40.0" />
+                     </VBox.margin>
+                  </AnchorPane>
+                  <Button fx:id="perfBtn" mnemonicParsing="false" onAction="#handlePerfBtn">
+                     <VBox.margin>
+                        <Insets top="40.0" />
+                     </VBox.margin>
+                  </Button>
+                    </children>
+                </VBox>
+            </children></AnchorPane>
+        <AnchorPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308">
+         <children>
+            <LineChart fx:id="lineChartFPS" stylesheets="@line-chart.css" layoutX="9.0" layoutY="14.0" AnchorPane.leftAnchor="10.0" AnchorPane.rightAnchor="10.0">
+              <xAxis>
+                <NumberAxis side="BOTTOM" />
+              </xAxis>
+              <yAxis>
+                <NumberAxis side="LEFT" />
+              </yAxis>
+            </LineChart>
+         </children></AnchorPane>
+    </items>
+</SplitPane>
