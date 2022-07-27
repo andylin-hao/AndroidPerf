@@ -4,6 +4,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.geometry.Side;
 import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
@@ -68,9 +69,9 @@ public class AppController implements Initializable {
         valCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.62));
 
         // initialize line charts
-        initLineChart(lineChartFPS, "FPS", 1, 60, 10);
-        initLineChart(lineChartCPU, "CPU", 2, 100, 20);
-        initLineChart(lineChartNetwork, "Network", 2, 1000, 100);
+        initLineChart(lineChartFPS, "FPS", new String[]{"FPS"}, 60, 10, false);
+        initLineChart(lineChartCPU, "CPU", new String[]{"App Usage", "Total Usage"}, 100, 20, true);
+        initLineChart(lineChartNetwork, "Network", new String[]{"Receive", "Send"}, 1000, 100, true);
 
         // set layer list comboBox's event handler
         layerListBox.getSelectionModel().selectedItemProperty().addListener(
@@ -80,9 +81,10 @@ public class AppController implements Initializable {
         updatePromptText();
     }
 
-    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, int numDataSeries, int yBound, int yTick) {
-        for (int i = 0; i < numDataSeries; i++) {
+    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, boolean legendVisible) {
+        for (String s : series) {
             XYChart.Series<Number, Number> data = new XYChart.Series<>();
+            data.setName(s);
             lineChart.getData().add(data);
         }
 
@@ -101,7 +103,8 @@ public class AppController implements Initializable {
         yAxis.setTickUnit(yTick);
         yAxis.setAutoRanging(false);
 
-        lineChart.setLegendVisible(false);
+        lineChart.setLegendVisible(legendVisible);
+        lineChart.setLegendSide(Side.RIGHT);
 
         lineChartMap.put(chartName, lineChart);
     }
@@ -112,6 +115,7 @@ public class AppController implements Initializable {
 
         for (int i = 0; i < dataArrays.length; i++) {
             var data = dataArrays[i];
+            var series = lineChart.getData().get(i).getData();
             int xVal = data.getXValue().intValue();
             NumberAxis xAxis = (NumberAxis) lineChart.getXAxis();
             double xBound = xAxis.getUpperBound();
@@ -124,12 +128,13 @@ public class AppController implements Initializable {
             int yVal = data.getYValue().intValue();
             NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
             double yBound = yAxis.getUpperBound();
-            if (yBound < yVal) {
+            if (yBound < yVal || series.size() == 0) {
                 yBound = (int) (Math.ceil((yVal / 5.)) * 5);
+                if (yBound == 0) yBound = 5;
                 yAxis.setUpperBound(yBound);
                 yAxis.setTickUnit(yBound / 5.);
             }
-            lineChart.getData().get(i).getData().add(data);
+            series.add(data);
         }
     }
 
