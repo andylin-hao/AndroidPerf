@@ -4,9 +4,6 @@ import javafx.application.Platform;
 import javafx.scene.chart.XYChart;
 import javafx.util.Pair;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 public class NetworkPerfService extends BasePerfService {
     private double lastRxBytes = 0;
     private double lastTxBytes = 0;
@@ -16,7 +13,7 @@ public class NetworkPerfService extends BasePerfService {
     void dump() {
         super.dump();
 
-        Pair<Double, Double> data = null;
+        Pair<Double, Double> data;
         double rxBytes = 0.;
         double txBytes = 0.;
 

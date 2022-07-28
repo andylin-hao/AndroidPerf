@@ -46,7 +46,7 @@ public class Device {
     private boolean hasStartedPerf = false;
 
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
-    private static final Pattern cpuModelPatternOld = Pattern.compile("Hardware\\s+:\\s+(.*)");
+    private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\)");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[(.*)x(.*):.*,.*]");
@@ -80,46 +80,60 @@ public class Device {
         androidVersion = execCmd("getprop ro.build.version.release");
         props.add(new DeviceProp("Android Version", String.valueOf(androidVersion)));
 
-        // acquire CPU info
+        // acquire CPU model info
         info = execCmd("cat /proc/cpuinfo");
-        String[] cpuInfo = info.split("\n\n");
-        ArrayList<String> frequencies = new ArrayList<>();
-        if (cpuInfo.length != 0) {
-            String oneCoreInfo = cpuInfo[0];
-            Matcher matcher = cpuModelPattern.matcher(oneCoreInfo);
-            if (matcher.find()) {
-                cpuCores = cpuInfo.length;
-                cpuModel = matcher.group(1);
-            } else {
-                // On certain old-version kernel, /proc/cpuinfo shows hardware info in extra lines like
-                // CPU param	: 295 416 416 606 944 295 437 437 605 1068
-                // Hardware	: Qualcomm Technologies, Inc MSM8996pro
-                // This was found on Pixel XL running Android 7.1.2
-                matcher = cpuModelPatternOld.matcher(cpuInfo[cpuInfo.length - 1]);
-                if (matcher.find()) {
-                    cpuCores = cpuInfo.length - 1;
-                    cpuModel = matcher.group(1);
-                }
-                else {
-                    cpuCores = cpuInfo.length;
-                    cpuModel = "Unknown";
-                    LOGGER.warn("Cannot get CPU info");
-                }
-            }
+        String oneCoreInfo = info.split("\n\n")[0];
+        Matcher matcher = cpuModelPattern.matcher(oneCoreInfo);
+        if (matcher.find()) {
+            cpuModel = matcher.group(1);
+        } else {
+            String boardName = execCmd("getprop ro.board.platform");
+            if (boardName.length() != 0)
+                cpuModel = boardName;
+            else
+                cpuModel = "Unknown";
+            LOGGER.warn("Cannot get CPU model info");
+        }
+        props.add(new DeviceProp("CPU Model", cpuModel));
 
+        // acquire CPU core info
+        info = execCmd("ls /sys/devices/system/cpu");
+        matcher = cpuCorePattern.matcher(info);
+        int num = 0;
+        while (matcher.find()) {
+            num++;
+        }
+        cpuCores = num;
+        props.add(new DeviceProp("CPU Cores", String.valueOf(cpuCores)));
+
+        // acquire CPU frequency info
+        ArrayList<String> frequencies = new ArrayList<>();
+        for (int i = 0; i < cpuCores; i++) {
+            String minFreqInfo = execCmd(String.format("cat /sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq", i));
+            String maxFreqInfo = execCmd(String.format("cat /sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i));
+            try {
+                String freq = String.format("%d MHz-%d MHz", Integer.parseInt(minFreqInfo) / 1000, Integer.parseInt(maxFreqInfo) / 1000);
+                if (!frequencies.contains(freq))
+                    frequencies.add(freq);
+            } catch (NumberFormatException e) {
+                LOGGER.warn("Cannot get frequency info", e);
+            }
+        }
+        if (frequencies.size() == 0) {
+            info = execCmd("cat /proc/cpuinfo");
             matcher = cpuFreqPattern.matcher(info);
 
             while (matcher.find()) {
-                String freq = matcher.group(1);
+                String freq = matcher.group(1) + " MHz";
                 if (!frequencies.contains(freq))
                     frequencies.add(freq);
             }
-        } else {
-            cpuCores = 0;
-            cpuModel = "Unknown";
-            LOGGER.warn("Cannot get CPU info");
         }
+
         cpuFrequencies = frequencies;
+        props.add(new DeviceProp("CPU Frequencies", String.join(", ", cpuFrequencies)));
+
+        // acquire CPU ABI info
         info = execCmd("getprop ro.product.cpu.abilist");
         if (!info.isEmpty())
             abiList = info;
@@ -127,9 +141,6 @@ public class Device {
             abiList = "Unknown";
             LOGGER.warn("Cannot get ABI info");
         }
-        props.add(new DeviceProp("CPU Model", cpuModel));
-        props.add(new DeviceProp("CPU Cores", String.valueOf(cpuCores)));
-        props.add(new DeviceProp("CPU Frequencies", String.join(", ", cpuFrequencies)));
         props.add(new DeviceProp("ABI List", abiList));
 
         // acquire memory info
@@ -160,7 +171,7 @@ public class Device {
         if (glInfo.length >= 3 && glInfo[0].contains("GLES")) {
             glVendor = glInfo[0].replace("GLES: ", "");
             glRenderer = glInfo[1];
-            glVersion = String.join(", ", Arrays.copyOfRange(glInfo, 2, glInfo.length - 1));
+            glVersion = String.join(", ", Arrays.copyOfRange(glInfo, 2, glInfo.length));
         } else {
             glVendor = "Unknown";
             glRenderer = "Unknown";
