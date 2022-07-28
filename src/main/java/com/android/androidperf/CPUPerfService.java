@@ -8,14 +8,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class CPUPerfService extends BasePerfService {
-    static private final Pattern totalCPUPattern = Pattern.compile(".* +(\\d+.\\d+)");
+    static private final Pattern totalCPUPattern = Pattern.compile(".* +([\\d.]+)");
+    static private final Pattern totalCPUPatternOld = Pattern.compile("([\\d.]+)%");
 
     @SuppressWarnings("unchecked")
     @Override
     void dump() {
         super.dump();
 
-        Pair<Double, Double> data = null;
+        Pair<Double, Double> data;
         double procUsage = 0.;
         double totalUsage = 0.;
 
@@ -39,15 +40,33 @@ public class CPUPerfService extends BasePerfService {
 
     Pair<Double, Double> acquireCPUData() {
         String info = device.execCmd("top -o CMDLINE,%CPU -n 1 -q -b -k%CPU");
-        Pattern procCPUPattern = Pattern.compile(String.format("%s.* +(\\d+.\\d+)", device.getTargetPackage()));
-        Matcher matcher = procCPUPattern.matcher(info);
+        String packageName = device.getTargetPackage();
+        Matcher matcher;
         double procUsage = 0.;
-        while (matcher.find()) {
-            procUsage += Double.parseDouble(matcher.group(1));
+        boolean oldTop = false;
+        if (info.contains(packageName)) {
+            Pattern procCPUPattern = Pattern.compile(String.format("%s.* +([\\d.]+)", packageName));
+            matcher = procCPUPattern.matcher(info);
+            while (matcher.find()) {
+                procUsage += Double.parseDouble(matcher.group(1));
+            }
+        } else {
+            oldTop = true;
+            info = device.execCmd("top -n 1 -s cpu");
+            Pattern procCPUPattern = Pattern.compile(String.format(".* +([\\d.]+)%% +.*%s.*", packageName));
+            matcher = procCPUPattern.matcher(info);
+            while (matcher.find()) {
+                procUsage += Double.parseDouble(matcher.group(1));
+            }
         }
 
+
+
         double totalUsage = 0.;
-        matcher = totalCPUPattern.matcher(info);
+        if (!oldTop)
+            matcher = totalCPUPattern.matcher(info);
+        else
+            matcher = totalCPUPatternOld.matcher(info);
         while (matcher.find()) {
             double usage = Double.parseDouble(matcher.group(1));
             if (usage == 0)

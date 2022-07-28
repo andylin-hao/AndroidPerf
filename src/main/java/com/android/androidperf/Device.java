@@ -1,7 +1,6 @@
 package com.android.androidperf;
 
 import javafx.application.Platform;
-import javafx.scene.chart.XYChart;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbConnection;
@@ -46,10 +45,11 @@ public class Device {
     private boolean hasStartedPerf = false;
 
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
+    private static final Pattern cpuModelPatternOld = Pattern.compile("Hardware\\s+:\\s+(.*)");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\)");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[(.*)x(.*):.*,.*]");
-    private static final Pattern bufferStatsPatternQ = Pattern.compile(".*slot=(.*)");
+    private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(.*)");
     private static final Pattern glInfoPattern = Pattern.compile("^GLES: (.*), (.*), (.*)$");
 
     Device(JadbDevice device, AppController appController) {
@@ -85,14 +85,25 @@ public class Device {
         String[] cpuInfo = info.split("\n\n");
         ArrayList<String> frequencies = new ArrayList<>();
         if (cpuInfo.length != 0) {
-            cpuCores = cpuInfo.length;
             String oneCoreInfo = cpuInfo[0];
             Matcher matcher = cpuModelPattern.matcher(oneCoreInfo);
             if (matcher.find()) {
+                cpuCores = cpuInfo.length;
                 cpuModel = matcher.group(1);
             } else {
-                cpuModel = "Unknown";
-                LOGGER.warn("Cannot get CPU info");
+                // On certain old-version kernel, /proc/cpuinfo shows hardware info in extra lines like
+                // CPU param	: 295 416 416 606 944 295 437 437 605 1068
+                // Hardware	: Qualcomm Technologies, Inc MSM8996pro
+                // This was found on Pixel XL running Android 7.1.2
+                matcher = cpuModelPatternOld.matcher(cpuInfo[cpuInfo.length - 1]);
+                cpuCores = cpuInfo.length - 1;
+                if (matcher.find()) {
+                    cpuModel = matcher.group(1);
+                }
+                else {
+                    cpuModel = "Unknown";
+                    LOGGER.warn("Cannot get CPU info");
+                }
             }
 
             matcher = cpuFreqPattern.matcher(info);
@@ -132,7 +143,7 @@ public class Device {
         props.add(new DeviceProp("Memory", Math.round(memSize) + " GB"));
 
         // acquire storage info
-        info = execCmd("df | grep /storage");
+        info = execCmd("df | grep /storage/emulated");
         String[] storageInfo = info.split(" +");
         if (storageInfo.length == 6) {
             storageSize = Double.parseDouble(storageInfo[1]) / 1024. / 1024.;
@@ -243,20 +254,20 @@ public class Device {
 
     private synchronized void updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
-        String updateLayerCmd = "dumpsys SurfaceFlinger | grep -E 'Layer.*0x.*|buffer:.*slot|activeBuffer'";
+        String updateLayerCmd = "dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'";
         String layerInfo = execCmd(updateLayerCmd);
         Matcher nameMatcher = layerNamePattern.matcher(layerInfo);
         Matcher bufferMatcher;
         // Below Android 10, we get:
         // + Layer 0x7f162ba23000 (StatusBar#0)
         //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
-        if (sdkVersion < 29)
+        if (sdkVersion <= 29)
             bufferMatcher = bufferStatsPattern.matcher(layerInfo);
             // Else, we get
-            // * compositionengine::Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
+            // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
             //      buffer: buffer=0x7615a547b140 slot=2
         else
-            bufferMatcher = bufferStatsPatternQ.matcher(layerInfo);
+            bufferMatcher = bufferStatsPatternR.matcher(layerInfo);
 
         int idx = 0;
         targetLayer = -1;
@@ -264,7 +275,7 @@ public class Device {
             String layerName = nameMatcher.group(1);
             if (layerName.contains(targetPackage)) {
                 Layer layer;
-                if (sdkVersion < 29) {
+                if (sdkVersion <= 29) {
                     int w = Integer.parseInt(bufferMatcher.group(1).strip());
                     int h = Integer.parseInt(bufferMatcher.group(2).strip());
                     layer = new Layer(layerName, w != 0 && h != 0);
@@ -384,6 +395,14 @@ public class Device {
 
     public String getCpuModel() {
         return cpuModel;
+    }
+
+    public double getMemSize() {
+        return memSize;
+    }
+
+    public double getStorageSize() {
+        return storageSize;
     }
 
     public ArrayList<String> getCpuFrequencies() {

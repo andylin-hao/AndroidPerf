@@ -37,7 +37,8 @@ public class FPSPerfService extends BasePerfService {
         // All timestamps are in nanoseconds. We use actualPresentTime to calculate frame time
         latencyData = latencyData.replace("\r\n", "\n");
         String[] dataLines;
-        if (device.getSdkVersion() == 24) {
+        int sdkVersion = device.getSdkVersion();
+        if (sdkVersion == 24 || sdkVersion == 25) {
             dataLines = latencyData.split("\n\n");
             latencyData = dataLines[selectedLayer];
         }

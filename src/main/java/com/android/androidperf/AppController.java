@@ -54,6 +54,9 @@ public class AppController implements Initializable {
             deviceMap.put(device.getDeviceADBID(), device);
         }
 
+        // autocompletion for package list
+        new AutoCompleteComboBoxListener<>(packageListBox);
+
         // initialize property table
         TableColumn<DeviceProp, String> nameCol = new TableColumn<>("Property");
         TableColumn<DeviceProp, String> valCol = new TableColumn<>("Value");
@@ -83,6 +86,8 @@ public class AppController implements Initializable {
 
         // UI update
         updatePromptText();
+        packageListBox.setDisable(true);
+        layerListBox.setDisable(true);
     }
 
     private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, boolean legendVisible) {
@@ -147,7 +152,6 @@ public class AppController implements Initializable {
             selectedDevice.endPerf();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
-        new AutoCompleteComboBoxListener<>(packageListBox);
 
         // register perf services
         selectedDevice.registerService(FPSPerfService.class);
@@ -172,6 +176,7 @@ public class AppController implements Initializable {
 
         // UI update
         updatePromptText();
+        packageListBox.setDisable(false);
     }
 
     public void handlePackageListBox() {
@@ -184,6 +189,7 @@ public class AppController implements Initializable {
         // UI update
         updateLayerListBox();
         updatePromptText();
+        layerListBox.setDisable(false);
     }
 
     public void updateLayerListBox() {
