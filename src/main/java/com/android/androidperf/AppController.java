@@ -13,7 +13,6 @@ import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.text.Text;
-import org.controlsfx.control.textfield.TextFields;
 
 import java.net.URL;
 import java.util.ArrayList;
@@ -85,7 +84,7 @@ public class AppController implements Initializable {
                 (options, oldValue, newValue) -> handleLayerListBox());
 
         // UI update
-        updatePromptText();
+        updateUIOnStateChanges();
         packageListBox.setDisable(true);
         layerListBox.setDisable(true);
     }
@@ -137,9 +136,9 @@ public class AppController implements Initializable {
             int yVal = data.getYValue().intValue();
             NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
             double yBound = yAxis.getUpperBound();
-            if (yBound < yVal || series.size() == 0) {
-                yBound = (int) (Math.ceil((yVal / 5.)) * 5);
-                if (yBound == 0) yBound = 5;
+            double desiredBound = (int) (Math.ceil((yVal / 5.) + 1) * 5);
+            if (yBound < desiredBound || series.size() == 0) {
+                yBound = desiredBound;
                 yAxis.setUpperBound(yBound);
                 yAxis.setTickUnit(yBound / 5.);
             }
@@ -149,7 +148,7 @@ public class AppController implements Initializable {
 
     public void handleDeviceListBox() {
         if (selectedDevice != null)
-            selectedDevice.endPerf();
+            selectedDevice.shutdown();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
 
@@ -175,12 +174,14 @@ public class AppController implements Initializable {
         propTable.getItems().addAll(data);
 
         // UI update
-        updatePromptText();
+        updateUIOnStateChanges();
         packageListBox.setDisable(false);
     }
 
     public void handlePackageListBox() {
         String packageName = packageListBox.getSelectionModel().getSelectedItem();
+        if (packageName == null || packageName.length() == 0)
+            return;
         selectedDevice.setTargetPackage(packageName);
 
         // initialize the layer list
@@ -188,7 +189,7 @@ public class AppController implements Initializable {
 
         // UI update
         updateLayerListBox();
-        updatePromptText();
+        updateUIOnStateChanges();
         layerListBox.setDisable(false);
     }
 
@@ -206,7 +207,7 @@ public class AppController implements Initializable {
         if (targetLayer != -1) {
             layerListBox.setValue(String.format("Layer#%d:%s", targetLayer, layers.get(targetLayer).layerName));
         }
-        updatePromptText();
+        updateUIOnStateChanges();
     }
 
     public void handleLayerListBox() {
@@ -218,7 +219,7 @@ public class AppController implements Initializable {
                 selectedDevice.setTargetLayer(idx, matcher.group(2));
             }
         }
-        updatePromptText();
+        updateUIOnStateChanges();
     }
 
     public void handlePerfBtn() {
@@ -229,9 +230,10 @@ public class AppController implements Initializable {
         }
     }
 
-    public void updatePromptText() {
+    public void updateUIOnStateChanges() {
         if (selectedDevice == null || selectedDevice.getTargetPackage() == null
                 || selectedDevice.getTargetLayer() < 0) {
+            lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             if (selectedDevice == null) {
                 deviceListBox.setPromptText("Select connected devices");
                 packageListBox.setPromptText("Select target package");

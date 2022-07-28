@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,7 +51,6 @@ public class Device {
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\)");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[(.*)x(.*):.*,.*]");
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(.*)");
-    private static final Pattern glInfoPattern = Pattern.compile("^GLES: (.*), (.*), (.*)$");
 
     Device(JadbDevice device, AppController appController) {
         jadbDevice = device;
@@ -96,11 +96,12 @@ public class Device {
                 // Hardware	: Qualcomm Technologies, Inc MSM8996pro
                 // This was found on Pixel XL running Android 7.1.2
                 matcher = cpuModelPatternOld.matcher(cpuInfo[cpuInfo.length - 1]);
-                cpuCores = cpuInfo.length - 1;
                 if (matcher.find()) {
+                    cpuCores = cpuInfo.length - 1;
                     cpuModel = matcher.group(1);
                 }
                 else {
+                    cpuCores = cpuInfo.length;
                     cpuModel = "Unknown";
                     LOGGER.warn("Cannot get CPU info");
                 }
@@ -156,11 +157,10 @@ public class Device {
         // acquire GPU info
         info = execCmd("dumpsys SurfaceFlinger | grep OpenGL");
         String[] glInfo = info.split(", ");
-        Matcher matcher = glInfoPattern.matcher(info);
-        if (matcher.find()) {
-            glVendor = matcher.group(1);
-            glRenderer = matcher.group(2);
-            glVersion = matcher.group(3);
+        if (glInfo.length >= 3 && glInfo[0].contains("GLES")) {
+            glVendor = glInfo[0].replace("GLES: ", "");
+            glRenderer = glInfo[1];
+            glVersion = String.join(", ", Arrays.copyOfRange(glInfo, 2, glInfo.length - 1));
         } else {
             glVendor = "Unknown";
             glRenderer = "Unknown";
@@ -210,7 +210,7 @@ public class Device {
             service.begin();
         }
         hasStartedPerf = true;
-        Platform.runLater(controller::updatePromptText);
+        Platform.runLater(controller::updateUIOnStateChanges);
     }
 
     void endPerf() {
@@ -220,7 +220,7 @@ public class Device {
             }
             hasStartedPerf = false;
         }
-        Platform.runLater(controller::updatePromptText);
+        Platform.runLater(controller::updateUIOnStateChanges);
     }
 
     void shutdown() {
@@ -284,7 +284,7 @@ public class Device {
                     layer = new Layer(layerName, bufferSlot != -1);
                 }
                 updatedLayerList.add(layer);
-                if (layer.hasBuffer && layer.isSurfaceView)
+                if (layer.hasBuffer && layer.isSurfaceView && targetLayer == -1)
                     targetLayer = idx;
                 else if (layer.hasBuffer && targetLayer == -1)
                     targetLayer = idx;
