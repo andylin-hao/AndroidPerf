@@ -4,9 +4,6 @@ import javafx.application.Platform;
 import javafx.scene.chart.XYChart;
 
 import java.util.ArrayList;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
 
 public class FPSPerfService extends BasePerfService {
     private long lastFrameTimestamp = 0;
@@ -21,7 +18,7 @@ public class FPSPerfService extends BasePerfService {
     }
 
     ArrayList<Long> acquireLatencyData() {
-        int selectedLayer = device.getTargetLayer();
+        int selectedLayer = device.getTargetLayerWithUpdate();
         var layer = device.getLayers().get(selectedLayer);
         String latencyData;
 

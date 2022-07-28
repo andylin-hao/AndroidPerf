@@ -12,7 +12,6 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -185,20 +184,6 @@ public class Device {
         updatePackageList();
     }
 
-    static ArrayList<Device> getDeviceList(AppController controller) {
-        try {
-            List<JadbDevice> adbDevices = connection.getDevices();
-            ArrayList<Device> devices = new ArrayList<>();
-            for (JadbDevice adbDevice : adbDevices) {
-                devices.add(new Device(adbDevice, controller));
-            }
-            return devices;
-        } catch (IOException | JadbException e) {
-            LOGGER.error("Cannot get device list");
-            return new ArrayList<>();
-        }
-    }
-
     void registerService(Class<?> serviceClass) {
         BasePerfService service;
         try {
@@ -245,19 +230,24 @@ public class Device {
         return hasStartedPerf;
     }
 
-    private void updatePackageList() {
+    public void updatePackageList() {
         ArrayList<String> packages = new ArrayList<>();
         Pattern pattern = Pattern.compile(" {6}android\\.intent\\.action\\.MAIN:\n( {8}.*\n)*");
-        Pattern pattern1 = Pattern.compile(" {8}\\S+ (\\S+)/.+");
+        Pattern namePattern = Pattern.compile(" {8}\\S+ (\\S+)/.+");
         String packageInfo = execCmd("dumpsys package r activity");
+        String processInfo = execCmd("ps -A");
         Matcher matcher = pattern.matcher(packageInfo);
         if (matcher.find()) {
             String packageIntentMain = packageInfo.substring(matcher.start(), matcher.end());
-            matcher = pattern1.matcher(packageIntentMain);
+            matcher = namePattern.matcher(packageIntentMain);
             while (matcher.find()) {
                 String name = matcher.group(1);
-                if (!packages.contains(name))
-                    packages.add(name);
+                if (!packages.contains(name)) {
+                    if (processInfo.contains(name))
+                        packages.add(0, name);
+                    else
+                        packages.add(name);
+                }
             }
         }
         packageList = packages;
@@ -303,9 +293,11 @@ public class Device {
             }
         }
         layers = updatedLayerList;
-        if (layers.size() > 0) {
-            Platform.runLater(controller::updateLayerListBox);
+        if (targetLayer == -1) {
+            // no available layers, stop profiling
+            endPerf();
         }
+        Platform.runLater(controller::updateLayerListBox);
     }
 
     void checkLayerChanges() {
@@ -350,11 +342,15 @@ public class Device {
             targetLayer = layer;
     }
 
-    public int getTargetLayer() {
+    public int getTargetLayerWithUpdate() {
         if (targetLayer == -1 || layers.size() == 0) {
             updateLayerList();
             return targetLayer;
         }
+        return targetLayer;
+    }
+
+    public int getTargetLayer() {
         return targetLayer;
     }
 

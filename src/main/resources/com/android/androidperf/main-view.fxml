@@ -5,7 +5,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="com.android.androidperf.AppController">
+<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
     <items>
         <AnchorPane minHeight="0.0" minWidth="0.0">
             <children>
@@ -32,11 +32,20 @@
                         <Insets top="40.0" />
                      </VBox.margin>
                   </AnchorPane>
-                  <Button fx:id="perfBtn" mnemonicParsing="false" onAction="#handlePerfBtn">
-                     <VBox.margin>
-                        <Insets top="40.0" />
-                     </VBox.margin>
-                  </Button>
+                  <HBox alignment="CENTER" prefHeight="100.0" prefWidth="200.0">
+                     <children>
+                        <Button fx:id="perfBtn" mnemonicParsing="false" onMouseClicked="#handlePerfBtn">
+                           <HBox.margin>
+                              <Insets right="10.0" />
+                           </HBox.margin>
+                        </Button>
+                        <Button fx:id="updateBtn" mnemonicParsing="false" text="Update" onMouseClicked="#handleUpdateBtn">
+                           <HBox.margin>
+                              <Insets left="10.0" />
+                           </HBox.margin>
+                        </Button>
+                     </children>
+                  </HBox>
                     </children>
                 </VBox>
             </children></AnchorPane>

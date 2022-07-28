@@ -13,15 +13,22 @@ import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.text.Text;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import se.vidstige.jadb.JadbDevice;
+import se.vidstige.jadb.JadbException;
 
+import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.ResourceBundle;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class AppController implements Initializable {
+    private static final Logger LOGGER = LogManager.getLogger(AppController.class);
     @FXML
     private ComboBox<String> deviceListBox;
     @FXML
@@ -32,6 +39,8 @@ public class AppController implements Initializable {
     private TableView<DeviceProp> propTable;
     @FXML
     private Button perfBtn;
+    @FXML
+    private Button updateBtn;
     @FXML
     private LineChart<Number, Number> lineChartFPS;
     @FXML
@@ -47,11 +56,7 @@ public class AppController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
         // initialize the device list
-        ArrayList<Device> devices = Device.getDeviceList(this);
-        for (var device : devices) {
-            deviceListBox.getItems().add(device.getDeviceADBID());
-            deviceMap.put(device.getDeviceADBID(), device);
-        }
+        updateDeviceList();
 
         // autocompletion for package list
         new AutoCompleteComboBoxListener<>(packageListBox);
@@ -87,6 +92,35 @@ public class AppController implements Initializable {
         updateUIOnStateChanges();
         packageListBox.setDisable(true);
         layerListBox.setDisable(true);
+    }
+
+    private void updateDeviceList() {
+        try {
+            List<JadbDevice> adbDevices = Device.connection.getDevices();
+            ArrayList<String> ids = new ArrayList<>();
+            ArrayList<String> obsoletes = new ArrayList<>();
+            for (JadbDevice adbDevice : adbDevices) {
+                ids.add(adbDevice.getSerial());
+                if (deviceMap.get(adbDevice.getSerial()) == null) {
+                    Device device = new Device(adbDevice, this);
+                    deviceListBox.getItems().add(device.getDeviceADBID());
+                    deviceMap.put(device.getDeviceADBID(), device);
+                }
+            }
+            deviceListBox.getItems().forEach(str -> {
+                if (!ids.contains(str)) obsoletes.add(str);
+            });
+            obsoletes.forEach(str -> {
+                deviceListBox.getItems().remove(str);
+                Device device = deviceMap.get(str);
+                if (device != null) {
+                    device.shutdown();
+                    deviceMap.remove(str);
+                }
+            });
+        } catch (IOException | JadbException e) {
+            LOGGER.error("Cannot get device list");
+        }
     }
 
     private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, boolean legendVisible) {
@@ -162,10 +196,8 @@ public class AppController implements Initializable {
         layerListBox.getItems().clear();
 
         // initialize the package list
-        ArrayList<String> packages = selectedDevice.getPackageList();
-        for (var packageName : packages) {
-            packageListBox.getItems().add(packageName);
-        }
+        packageListBox.getItems().clear();
+        packageListBox.getItems().addAll(selectedDevice.getPackageList());
         packageListBox.setEditable(true);
 
         // initialize basic properties of the device
@@ -188,7 +220,6 @@ public class AppController implements Initializable {
         selectedDevice.checkLayerChanges();
 
         // UI update
-        updateLayerListBox();
         updateUIOnStateChanges();
         layerListBox.setDisable(false);
     }
@@ -230,17 +261,33 @@ public class AppController implements Initializable {
         }
     }
 
+    public void handleUpdateBtn() {
+        updateDeviceList();
+        if (selectedDevice != null) {
+            selectedDevice.updatePackageList();
+            String selected = packageListBox.getSelectionModel().getSelectedItem();
+            packageListBox.getItems().setAll(selectedDevice.getPackageList());
+            if (packageListBox.getItems().contains(selected)) {
+                packageListBox.setValue(selected);
+            } else {
+                // target app may be uninstalled
+                selectedDevice.endPerf();
+            }
+        }
+    }
+
     public void updateUIOnStateChanges() {
         if (selectedDevice == null || selectedDevice.getTargetPackage() == null
                 || selectedDevice.getTargetLayer() < 0) {
-            lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             if (selectedDevice == null) {
                 deviceListBox.setPromptText("Select connected devices");
                 packageListBox.setPromptText("Select target package");
                 layerListBox.setPromptText("Select target app layer");
+                lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             } else if (selectedDevice.getTargetPackage() == null) {
                 packageListBox.setPromptText("Select target package");
                 layerListBox.setPromptText("Select target app layer");
+                lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             } else {
                 layerListBox.setPromptText("Select target app layer");
             }
