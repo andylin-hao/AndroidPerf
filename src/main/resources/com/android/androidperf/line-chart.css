@@ -1,8 +1,15 @@
 .axis {
     -fx-tick-label-font-size: 1.3em;
-    -fx-tick-label-font-weight: bolder;
-    -fx-tick-label-font-family: 'monospace';
+    -fx-tick-label-font-weight: bold;
+    -fx-tick-label-font-family: 'serif';
     -fx-tick-label-fill: #757575;
+}
+
+.axis-label{
+    -fx-font-size: 1.3em;
+    -fx-font-weight: bolder;
+    -fx-font-family: 'serif';
+    -fx-text-fill: #757575;
 }
 
 .chart-vertical-grid-lines {

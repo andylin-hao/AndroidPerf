@@ -355,8 +355,6 @@ public class Device {
     }
 
     public ArrayList<Layer> getLayers() {
-        if (layers.size() == 0)
-            updateLayerList();
         return layers;
     }
 

@@ -80,9 +80,9 @@ public class AppController implements Initializable {
         valCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.62));
 
         // initialize line charts
-        initLineChart(lineChartFPS, "FPS", new String[]{"FPS"}, 60, 10, false);
-        initLineChart(lineChartCPU, "CPU", new String[]{"App Usage", "Total Usage"}, 100, 20, true);
-        initLineChart(lineChartNetwork, "Network", new String[]{"Receive", "Send"}, 1000, 100, true);
+        initLineChart(lineChartFPS, "FPS", new String[]{"FPS"}, 60, 10, "FPS");
+        initLineChart(lineChartCPU, "CPU", new String[]{"App", "Total"}, 100, 20, "%");
+        initLineChart(lineChartNetwork, "Network", new String[]{"Recv", "Send"}, 1000, 100, "KB/s");
 
         // set layer list comboBox's event handler
         layerListBox.getSelectionModel().selectedItemProperty().addListener(
@@ -123,7 +123,7 @@ public class AppController implements Initializable {
         }
     }
 
-    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, boolean legendVisible) {
+    private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, String yLabel) {
         for (String s : series) {
             XYChart.Series<Number, Number> data = new XYChart.Series<>();
             data.setName(s);
@@ -143,9 +143,9 @@ public class AppController implements Initializable {
         yAxis.setLowerBound(0);
         yAxis.setUpperBound(yBound);
         yAxis.setTickUnit(yTick);
+        yAxis.setLabel(yLabel);
         yAxis.setAutoRanging(false);
 
-        lineChart.setLegendVisible(legendVisible);
         lineChart.setLegendSide(Side.RIGHT);
 
         lineChartMap.put(chartName, lineChart);

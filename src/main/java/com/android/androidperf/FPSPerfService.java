@@ -18,8 +18,13 @@ public class FPSPerfService extends BasePerfService {
     }
 
     ArrayList<Long> acquireLatencyData() {
-        int selectedLayer = device.getTargetLayerWithUpdate();
-        var layer = device.getLayers().get(selectedLayer);
+        int selectedLayer = device.getTargetLayer();
+        var layers = device.getLayers();
+        Layer layer;
+        if (selectedLayer != -1 && layers.size() != 0)
+            layer = device.getLayers().get(selectedLayer);
+        else
+            return new ArrayList<>();
         String latencyData;
 
         if (layer == null)
@@ -82,8 +87,8 @@ public class FPSPerfService extends BasePerfService {
 
     @Override
     void update() {
-        var frameResults = acquireLatencyData();
         device.checkLayerChanges();
+        var frameResults = acquireLatencyData();
 
         int i = 0;
         for (; i < frameResults.size(); i++) {
