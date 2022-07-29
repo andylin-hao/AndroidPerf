@@ -1,5 +1,6 @@
 package com.android.androidperf;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.EventHandler;
@@ -24,6 +25,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,6 +57,7 @@ public class AppController implements Initializable {
     public Device selectedDevice;
     private final HashMap<String, Device> deviceMap = new HashMap<>();
     private final Pattern layerPattern = Pattern.compile("Layer#(\\d*):(.*)");
+    private final ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
@@ -92,6 +98,9 @@ public class AppController implements Initializable {
         updateUIOnStateChanges();
         packageListBox.setDisable(true);
         layerListBox.setDisable(true);
+
+        // activate auto refresh task
+        executorService.scheduleAtFixedRate(this::refreshTask, 500, 500, TimeUnit.MILLISECONDS);
     }
 
     private void updateDeviceList() {
@@ -196,8 +205,7 @@ public class AppController implements Initializable {
         layerListBox.getItems().clear();
 
         // initialize the package list
-        packageListBox.getItems().clear();
-        packageListBox.getItems().addAll(selectedDevice.getPackageList());
+        updatePackageListBox();
         packageListBox.setEditable(true);
 
         // initialize basic properties of the device
@@ -210,14 +218,39 @@ public class AppController implements Initializable {
         packageListBox.setDisable(false);
     }
 
+    private void refreshTask() {
+        if (selectedDevice != null) {
+            boolean isChanged = selectedDevice.checkCurrentPackage();
+            if (isChanged)
+                Platform.runLater(this::updatePackageListBox);
+            else {
+                String packageName = selectedDevice.getTargetPackage();
+                if (packageName != null && !packageName.isEmpty()) {
+                    isChanged = selectedDevice.checkLayerChanges();
+                    if (isChanged)
+                        Platform.runLater(this::updateLayerListBox);
+                }
+            }
+        }
+    }
+
+    public void updatePackageListBox() {
+        String selected = packageListBox.getSelectionModel().getSelectedItem();
+        packageListBox.getItems().setAll(selectedDevice.getPackageList());
+        if (selected != null && packageListBox.getItems().contains(selected)) {
+            packageListBox.setValue(selected);
+        } else {
+            // target app may be uninstalled
+            selectedDevice.endPerf();
+        }
+    }
+
     public void handlePackageListBox() {
         String packageName = packageListBox.getSelectionModel().getSelectedItem();
         if (packageName == null || packageName.length() == 0)
             return;
         selectedDevice.setTargetPackage(packageName);
-
-        // initialize the layer list
-        selectedDevice.checkLayerChanges();
+        updateLayerListBox();
 
         // UI update
         updateUIOnStateChanges();
@@ -265,14 +298,7 @@ public class AppController implements Initializable {
         updateDeviceList();
         if (selectedDevice != null) {
             selectedDevice.updatePackageList();
-            String selected = packageListBox.getSelectionModel().getSelectedItem();
-            packageListBox.getItems().setAll(selectedDevice.getPackageList());
-            if (packageListBox.getItems().contains(selected)) {
-                packageListBox.setValue(selected);
-            } else {
-                // target app may be uninstalled
-                selectedDevice.endPerf();
-            }
+            updatePackageListBox();
         }
     }
 
@@ -305,6 +331,7 @@ public class AppController implements Initializable {
 
     public void shutdown() {
         deviceMap.forEach((s, device) -> device.shutdown());
+        executorService.shutdownNow();
     }
 
     static class AutoCompleteComboBoxListener<T> implements EventHandler<KeyEvent> {

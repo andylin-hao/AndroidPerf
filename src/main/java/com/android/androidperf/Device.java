@@ -47,9 +47,8 @@ public class Device {
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
-    private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\)");
-    private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[(.*)x(.*):.*,.*]");
-    private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(.*)");
+    private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*,.*]");
+    private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
 
     Device(JadbDevice device, AppController appController) {
         jadbDevice = device;
@@ -89,9 +88,10 @@ public class Device {
             String boardName = execCmd("getprop ro.board.platform");
             if (boardName.length() != 0)
                 cpuModel = boardName;
-            else
+            else {
                 cpuModel = "Unknown";
-            LOGGER.warn("Cannot get CPU model info");
+                LOGGER.warn("Cannot get CPU model info");
+            }
         }
         props.add(new DeviceProp("CPU Model", cpuModel));
 
@@ -232,80 +232,122 @@ public class Device {
 
     public void updatePackageList() {
         ArrayList<String> packages = new ArrayList<>();
-        Pattern pattern = Pattern.compile(" {6}android\\.intent\\.action\\.MAIN:\n( {8}.*\n)*");
+        String mainIntent = "      android.intent.action.MAIN:";
+        String intent = "      android.intent.action.";
         Pattern namePattern = Pattern.compile(" {8}\\S+ (\\S+)/.+");
+
         String packageInfo = execCmd("dumpsys package r activity");
         String processInfo = execCmd("ps -A");
-        Matcher matcher = pattern.matcher(packageInfo);
-        if (matcher.find()) {
-            String packageIntentMain = packageInfo.substring(matcher.start(), matcher.end());
-            matcher = namePattern.matcher(packageIntentMain);
-            while (matcher.find()) {
-                String name = matcher.group(1);
-                if (!packages.contains(name)) {
-                    if (processInfo.contains(name))
-                        packages.add(0, name);
-                    else
-                        packages.add(name);
+
+        int start = packageInfo.indexOf(mainIntent);
+        if (start != -1) {
+            int end = packageInfo.indexOf(intent, start + mainIntent.length());
+            if (end != -1) {
+                String packageIntentMain = packageInfo.substring(start + mainIntent.length() + 1, end).strip();
+                Matcher matcher = namePattern.matcher(packageIntentMain);
+                while (matcher.find()) {
+                    String name = matcher.group(1);
+                    if (!packages.contains(name)) {
+                        if (processInfo.contains(name))
+                            packages.add(0, name);
+                        else
+                            packages.add(name);
+                    }
                 }
             }
         }
         packageList = packages;
     }
 
+    public boolean checkCurrentPackage() {
+        String info = execCmd("dumpsys window | grep mCurrentFocus");
+        String[] activityInfo = info.split(" ");
+        String focusedWindow = activityInfo[activityInfo.length - 1];
+        focusedWindow = focusedWindow.replace("}", "");
+        String[] packageInfo = focusedWindow.split("/");
+        String packageName = packageInfo[0];
+        if (packageInfo.length == 2 && !packageList.get(0).equals(packageName)) {
+            packageList.remove(packageName);
+            packageList.add(0, packageName);
+            return true;
+        }
+        return false;
+    }
+
     private synchronized void updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
-        String updateLayerCmd = "dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'";
-        String layerInfo = execCmd(updateLayerCmd);
-        Matcher nameMatcher = layerNamePattern.matcher(layerInfo);
-        Matcher bufferMatcher;
-        // Below Android 10, we get:
-        // + Layer 0x7f162ba23000 (StatusBar#0)
-        //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
-        if (sdkVersion <= 29)
-            bufferMatcher = bufferStatsPattern.matcher(layerInfo);
-            // Else, we get
-            // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
-            //      buffer: buffer=0x7615a547b140 slot=2
-        else
-            bufferMatcher = bufferStatsPatternR.matcher(layerInfo);
+        String info = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
+        if (info.isEmpty()) {
+            targetLayer = -1;
+            layers.clear();
+            return;
+        }
+        String[] layerList = info.split("\n");
+
+        info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'");
 
         int idx = 0;
         targetLayer = -1;
-        while (nameMatcher.find() && bufferMatcher.find()) {
-            String layerName = nameMatcher.group(1);
-            if (layerName.contains(targetPackage)) {
-                Layer layer;
-                if (sdkVersion <= 29) {
-                    int w = Integer.parseInt(bufferMatcher.group(1).strip());
-                    int h = Integer.parseInt(bufferMatcher.group(2).strip());
-                    layer = new Layer(layerName, w != 0 && h != 0);
-                } else {
+
+        Pattern pattern;
+        Matcher matcher;
+        Matcher bufferMatcher;
+        for (var layerName: layerList) {
+            pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((.*%s.*)\\).*", Pattern.quote(layerName)));
+            matcher = pattern.matcher(info);
+            if (matcher.find()) {
+                int end = matcher.end();
+                int start = matcher.start();
+                String bufferInfo = info.substring(end);
+                Layer layer = null;
+
+                // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
+                //      buffer: buffer=0x7615a547b140 slot=2
+                bufferMatcher = bufferStatsPatternR.matcher(bufferInfo);
+                if (bufferMatcher.find()) {
                     long bufferSlot = Long.parseLong(bufferMatcher.group(1).strip());
                     layer = new Layer(layerName, bufferSlot != -1);
+                    info = info.replace(info.substring(start, end), "");
+                    info = info.replace(info.substring(bufferMatcher.start(), bufferMatcher.end()), "");
+                } else {
+                    // + Layer 0x7f162ba23000 (StatusBar#0)
+                    //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
+                    bufferMatcher = bufferStatsPattern.matcher(bufferInfo);
+                    if (bufferMatcher.find()) {
+                        int w = Integer.parseInt(bufferMatcher.group(1).strip());
+                        int h = Integer.parseInt(bufferMatcher.group(2).strip());
+                        layer = new Layer(layerName, w != 0 && h != 0);
+                        info = info.replace(info.substring(start, end), "");
+                        info = info.replace(info.substring(bufferMatcher.start(), bufferMatcher.end()), "");
+                    }
                 }
-                updatedLayerList.add(layer);
-                if (layer.hasBuffer && layer.isSurfaceView && targetLayer == -1)
-                    targetLayer = idx;
-                else if (layer.hasBuffer && targetLayer == -1)
-                    targetLayer = idx;
-                idx++;
-            }
+                if (layer != null) {
+                    updatedLayerList.add(layer);
+                    if (layer.hasBuffer && layer.isSurfaceView && targetLayer == -1)
+                        targetLayer = idx;
+                    else if (layer.hasBuffer && targetLayer == -1)
+                        targetLayer = idx;
+                    idx++;
+                }
+            } else
+                LOGGER.error(String.format("Cannot find %s in dumpsys info: %s", layerName, info));
         }
+
         layers = updatedLayerList;
         if (targetLayer == -1) {
             // no available layers, stop profiling
             endPerf();
         }
-        Platform.runLater(controller::updateLayerListBox);
     }
 
-    void checkLayerChanges() {
+    boolean checkLayerChanges() {
         String layerStr = layerListToString();
         String listInfo = execCmd(String.format("dumpsys SurfaceFlinger --list | grep %s", targetPackage));
         if (layerStr.length() == 0 || !listInfo.contains(layerStr)) {
             updateLayerList();
+            return true;
         }
+        return false;
     }
 
     String layerListToString() {
@@ -340,14 +382,6 @@ public class Device {
             updateLayerList();
         } else
             targetLayer = layer;
-    }
-
-    public int getTargetLayerWithUpdate() {
-        if (targetLayer == -1 || layers.size() == 0) {
-            updateLayerList();
-            return targetLayer;
-        }
-        return targetLayer;
     }
 
     public int getTargetLayer() {

@@ -87,7 +87,6 @@ public class FPSPerfService extends BasePerfService {
 
     @Override
     void update() {
-        device.checkLayerChanges();
         var frameResults = acquireLatencyData();
 
         int i = 0;

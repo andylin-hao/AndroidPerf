@@ -29,9 +29,7 @@ public class MainApplication extends Application {
     @Override
     public void stop() {
         AppController controller = fxmlLoader.getController();
-        if (controller.selectedDevice != null) {
-            controller.shutdown();
-        }
+        controller.shutdown();
     }
 
     public static void alert(String alertText, Alert.AlertType type) {
