@@ -47,7 +47,8 @@ public class Device {
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
-    private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*,.*]");
+    private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\).*");
+    private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
 
     Device(JadbDevice device, AppController appController) {
@@ -114,9 +115,7 @@ public class Device {
                 String freq = String.format("%d MHz-%d MHz", Integer.parseInt(minFreqInfo) / 1000, Integer.parseInt(maxFreqInfo) / 1000);
                 if (!frequencies.contains(freq))
                     frequencies.add(freq);
-            } catch (NumberFormatException e) {
-                LOGGER.warn("Cannot get frequency info", e);
-            }
+            } catch (NumberFormatException ignored) {}
         }
         if (frequencies.size() == 0) {
             info = execCmd("cat /proc/cpuinfo");
@@ -299,6 +298,9 @@ public class Device {
                 int end = matcher.end();
                 int start = matcher.start();
                 String bufferInfo = info.substring(end);
+                matcher = layerNamePattern.matcher(bufferInfo);
+                if (matcher.find())
+                    bufferInfo = bufferInfo.substring(0, matcher.start());
                 Layer layer = null;
 
                 // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
@@ -307,8 +309,7 @@ public class Device {
                 if (bufferMatcher.find()) {
                     long bufferSlot = Long.parseLong(bufferMatcher.group(1).strip());
                     layer = new Layer(layerName, bufferSlot != -1);
-                    info = info.replace(info.substring(start, end), "");
-                    info = info.replace(info.substring(bufferMatcher.start(), bufferMatcher.end()), "");
+                    info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                 } else {
                     // + Layer 0x7f162ba23000 (StatusBar#0)
                     //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
