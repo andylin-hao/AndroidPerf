@@ -1,6 +1,9 @@
 package com.android.androidperf;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.collections.ObservableMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbConnection;
@@ -12,6 +15,7 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,8 +41,9 @@ public class Device {
     private final ArrayList<DeviceProp> props = new ArrayList<>();
 
     private final ArrayList<BasePerfService> services = new ArrayList<>();
-    private ArrayList<Layer> layers = new ArrayList<>();
-    private ArrayList<String> packageList = new ArrayList<>();
+    private final ObservableMap<Integer, Layer> layers = FXCollections.observableHashMap();
+    private String lastLayerList = "";
+    private final ObservableList<String> packageList = FXCollections.observableArrayList();
     private String targetPackage;
     private int targetLayer = -1;
 
@@ -55,6 +60,11 @@ public class Device {
         jadbDevice = device;
         controller = appController;
         deviceADBID = jadbDevice.getSerial();
+
+        // register perf services
+        registerService(FPSPerfService.class);
+        registerService(CPUPerfService.class);
+        registerService(NetworkPerfService.class);
 
         // acquire device name
         String info = execCmd("getprop ro.product.model");
@@ -115,7 +125,8 @@ public class Device {
                 String freq = String.format("%d MHz-%d MHz", Integer.parseInt(minFreqInfo) / 1000, Integer.parseInt(maxFreqInfo) / 1000);
                 if (!frequencies.contains(freq))
                     frequencies.add(freq);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (frequencies.size() == 0) {
             info = execCmd("cat /proc/cpuinfo");
@@ -255,7 +266,7 @@ public class Device {
                 }
             }
         }
-        packageList = packages;
+        Platform.runLater(() -> packageList.setAll(packages));
     }
 
     public boolean checkCurrentPackage() {
@@ -266,19 +277,22 @@ public class Device {
         String[] packageInfo = focusedWindow.split("/");
         String packageName = packageInfo[0];
         if (packageInfo.length == 2 && !packageList.get(0).equals(packageName)) {
-            packageList.remove(packageName);
-            packageList.add(0, packageName);
+            Platform.runLater(() -> {
+                packageList.remove(packageName);
+                packageList.add(0, packageName);
+            });
             return true;
         }
         return false;
     }
 
     private synchronized void updateLayerList() {
-        ArrayList<Layer> updatedLayerList = new ArrayList<>();
+        HashMap<Integer, Layer> updatedLayerList = new HashMap<>();
         String info = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
+        lastLayerList = info;
         if (info.isEmpty()) {
             targetLayer = -1;
-            layers.clear();
+            Platform.runLater(layers::clear);
             return;
         }
         String[] layerList = info.split("\n");
@@ -291,7 +305,7 @@ public class Device {
         Pattern pattern;
         Matcher matcher;
         Matcher bufferMatcher;
-        for (var layerName: layerList) {
+        for (var layerName : layerList) {
             pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((.*%s.*)\\).*", Pattern.quote(layerName)));
             matcher = pattern.matcher(info);
             if (matcher.find()) {
@@ -308,7 +322,7 @@ public class Device {
                 bufferMatcher = bufferStatsPatternR.matcher(bufferInfo);
                 if (bufferMatcher.find()) {
                     long bufferSlot = Long.parseLong(bufferMatcher.group(1).strip());
-                    layer = new Layer(layerName, bufferSlot != -1);
+                    layer = new Layer(layerName, bufferSlot != -1, idx);
                     info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                 } else {
                     // + Layer 0x7f162ba23000 (StatusBar#0)
@@ -317,46 +331,40 @@ public class Device {
                     if (bufferMatcher.find()) {
                         int w = Integer.parseInt(bufferMatcher.group(1).strip());
                         int h = Integer.parseInt(bufferMatcher.group(2).strip());
-                        layer = new Layer(layerName, w != 0 && h != 0);
+                        layer = new Layer(layerName, w != 0 && h != 0, idx);
                         info = info.replace(info.substring(start, end), "");
                         info = info.replace(info.substring(bufferMatcher.start(), bufferMatcher.end()), "");
                     }
                 }
                 if (layer != null) {
-                    updatedLayerList.add(layer);
-                    if (layer.hasBuffer && layer.isSurfaceView && targetLayer == -1)
-                        targetLayer = idx;
-                    else if (layer.hasBuffer && targetLayer == -1)
-                        targetLayer = idx;
+                    if (layer.hasBuffer) {
+                        updatedLayerList.put(idx, layer);
+                        if (layer.isSurfaceView && targetLayer == -1)
+                            targetLayer = idx;
+                        else if (targetLayer == -1)
+                            targetLayer = idx;
+                    }
                     idx++;
                 }
             } else
                 LOGGER.error(String.format("Cannot find %s in dumpsys info: %s", layerName, info));
         }
 
-        layers = updatedLayerList;
+        Platform.runLater(() -> {
+            layers.clear();
+            layers.putAll(updatedLayerList);
+        });
         if (targetLayer == -1) {
             // no available layers, stop profiling
             endPerf();
         }
     }
 
-    boolean checkLayerChanges() {
-        String layerStr = layerListToString();
-        String listInfo = execCmd(String.format("dumpsys SurfaceFlinger --list | grep %s", targetPackage));
-        if (layerStr.length() == 0 || !listInfo.contains(layerStr)) {
+    void checkLayerChanges() {
+        String listInfo = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
+        if (lastLayerList.isEmpty() || !listInfo.contains(lastLayerList)) {
             updateLayerList();
-            return true;
         }
-        return false;
-    }
-
-    String layerListToString() {
-        StringBuilder layerStr = new StringBuilder();
-        for (var layer : layers) {
-            layerStr.append(layer.layerName).append("\n");
-        }
-        return layerStr.toString().strip();
     }
 
     String execCmd(String cmd, String... args) {
@@ -378,18 +386,15 @@ public class Device {
         return targetPackage;
     }
 
-    public void setTargetLayer(int layer, String name) {
-        if (layer >= layers.size() || !layers.get(layer).layerName.equals(name)) {
-            updateLayerList();
-        } else
-            targetLayer = layer;
+    public void setTargetLayer(int layer) {
+        targetLayer = layer;
     }
 
-    public int getTargetLayer() {
-        return targetLayer;
+    public Layer getTargetLayer() {
+        return layers.get(targetLayer);
     }
 
-    public ArrayList<Layer> getLayers() {
+    public ObservableMap<Integer, Layer> getLayers() {
         return layers;
     }
 
@@ -449,7 +454,7 @@ public class Device {
         return cpuFrequencies;
     }
 
-    public ArrayList<String> getPackageList() {
+    public ObservableList<String> getPackageList() {
         return packageList;
     }
 

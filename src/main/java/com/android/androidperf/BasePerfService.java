@@ -11,8 +11,8 @@ public class BasePerfService extends Thread {
     protected Device device = null;
     protected int sampleIntervalMilli = 500;
     protected long dumpTimer = 0;
-    protected Future<?> updateTask;
-    protected Future<?> dumpTask;
+    protected Future<?> updateTask = null;
+    protected Future<?> dumpTask = null;
     protected ScheduledExecutorService executorService = Executors.newScheduledThreadPool(3);
 
     void dump() {dumpTimer++;}
@@ -24,6 +24,8 @@ public class BasePerfService extends Thread {
     void end() {
         updateTask.cancel(true);
         dumpTask.cancel(true);
+        dumpTimer = 0;
+        dataQueue.clear();
     }
     void shutdown() {executorService.shutdownNow();}
     void registerDevice(Device dev) {

@@ -27,8 +27,15 @@ public class CPUPerfService extends BasePerfService {
             totalUsage += data.getValue();
             count++;
         }
-        double finalProcUsage = procUsage / count;
-        double finalTotalUsage = totalUsage / count;
+        if (count == 0) {
+            procUsage = 0;
+            totalUsage = 0;
+        } else {
+            procUsage = procUsage / count;
+            totalUsage = totalUsage / count;
+        }
+        double finalProcUsage = procUsage;
+        double finalTotalUsage = totalUsage;
 
         Platform.runLater(() -> device.getController()
                 .addDataToChart(

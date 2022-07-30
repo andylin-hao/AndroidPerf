@@ -1,6 +1,7 @@
 package com.android.androidperf;
 
 import javafx.application.Platform;
+import javafx.collections.ObservableList;
 import javafx.scene.chart.XYChart;
 
 import java.util.ArrayList;
@@ -11,26 +12,16 @@ public class FPSPerfService extends BasePerfService {
     private int numFrames = 0;
 
     void clearLatencyData() {
-        ArrayList<Layer> layers = device.getLayers();
-        for (var layer : layers) {
-            device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName));
-        }
+        device.getLayers().forEach((id, layer) -> device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName)));
     }
 
     ArrayList<Long> acquireLatencyData() {
-        int selectedLayer = device.getTargetLayer();
-        var layers = device.getLayers();
-        Layer layer;
-        if (selectedLayer != -1 && layers.size() != 0)
-            layer = device.getLayers().get(selectedLayer);
-        else
+        Layer layer = device.getTargetLayer();
+        if (layer == null)
             return new ArrayList<>();
         String latencyData;
 
-        if (layer == null)
-            latencyData = device.execCmd("dumpsys SurfaceFlinger --latency");
-        else
-            latencyData = device.execCmd(String.format("dumpsys SurfaceFlinger --latency '%s'", layer.layerName));
+        latencyData = device.execCmd(String.format("dumpsys SurfaceFlinger --latency '%s'", layer.layerName));
 
         if (latencyData.isEmpty())
             return new ArrayList<>();
@@ -42,7 +33,7 @@ public class FPSPerfService extends BasePerfService {
         int sdkVersion = device.getSdkVersion();
         if (sdkVersion == 24 || sdkVersion == 25) {
             dataLines = latencyData.split("\n\n");
-            latencyData = dataLines[selectedLayer];
+            latencyData = dataLines[layer.id];
         }
         dataLines = latencyData.split("\n");
         var results = new ArrayList<Long>();

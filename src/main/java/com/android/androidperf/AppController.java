@@ -2,7 +2,9 @@ package com.android.androidperf;
 
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.MapChangeListener;
 import javafx.collections.ObservableList;
+import javafx.collections.ObservableMap;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -39,13 +41,11 @@ public class AppController implements Initializable {
     @FXML
     private ComboBox<String> packageListBox;
     @FXML
-    private ComboBox<String> layerListBox;
+    private ComboBox<Layer> layerListBox;
     @FXML
     private TableView<DeviceProp> propTable;
     @FXML
     private Button perfBtn;
-    @FXML
-    private Button updateBtn;
     @FXML
     private LineChart<Number, Number> lineChartFPS;
     @FXML
@@ -53,6 +53,7 @@ public class AppController implements Initializable {
     @FXML
     private LineChart<Number, Number> lineChartNetwork;
     private final HashMap<String, LineChart<Number, Number>> lineChartMap = new HashMap<>();
+    private MapChangeListener<? super Integer, ? super Layer> layerListener = null;
 
     public Device selectedDevice;
     private final HashMap<String, Device> deviceMap = new HashMap<>();
@@ -191,22 +192,29 @@ public class AppController implements Initializable {
 
     public void handleDeviceListBox() {
         if (selectedDevice != null)
-            selectedDevice.shutdown();
+            selectedDevice.endPerf();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
 
-        // register perf services
-        selectedDevice.registerService(FPSPerfService.class);
-        selectedDevice.registerService(CPUPerfService.class);
-        selectedDevice.registerService(NetworkPerfService.class);
-
         propTable.getItems().clear();
-        packageListBox.getItems().clear();
         layerListBox.getItems().clear();
 
         // initialize the package list
-        updatePackageListBox();
+        packageListBox.setItems(selectedDevice.getPackageList());
         packageListBox.setEditable(true);
+
+        // bind the layer list to the data source
+        ObservableMap<Integer, Layer> layers = selectedDevice.getLayers();
+        if (layerListener != null)
+            layers.removeListener(layerListener);
+        layerListener = (MapChangeListener<Integer, Layer>) change -> {
+            layerListBox.getItems().setAll(layers.values());
+            Layer targetLayer = selectedDevice.getTargetLayer();
+            if (targetLayer != null)
+                layerListBox.setValue(targetLayer);
+            updateUIOnStateChanges();
+        };
+        layers.addListener(layerListener);
 
         // initialize basic properties of the device
         ArrayList<DeviceProp> props = selectedDevice.getProps();
@@ -221,67 +229,32 @@ public class AppController implements Initializable {
     private void refreshTask() {
         if (selectedDevice != null) {
             boolean isChanged = selectedDevice.checkCurrentPackage();
-            if (isChanged)
-                Platform.runLater(this::updatePackageListBox);
-            else {
+            if (!isChanged) {
                 String packageName = selectedDevice.getTargetPackage();
                 if (packageName != null && !packageName.isEmpty()) {
-                    isChanged = selectedDevice.checkLayerChanges();
-                    if (isChanged)
-                        Platform.runLater(this::updateLayerListBox);
+                    selectedDevice.checkLayerChanges();
                 }
             }
         }
     }
 
-    public void updatePackageListBox() {
-        String selected = packageListBox.getSelectionModel().getSelectedItem();
-        packageListBox.getItems().setAll(selectedDevice.getPackageList());
-        if (selected != null && packageListBox.getItems().contains(selected)) {
-            packageListBox.setValue(selected);
-        } else {
-            // target app may be uninstalled
-            selectedDevice.endPerf();
-        }
-    }
-
     public void handlePackageListBox() {
         String packageName = packageListBox.getSelectionModel().getSelectedItem();
-        if (packageName == null || packageName.length() == 0)
+        if (packageName == null || packageName.length() == 0) {
+            selectedDevice.endPerf();
             return;
+        }
         selectedDevice.setTargetPackage(packageName);
-        updateLayerListBox();
 
         // UI update
         updateUIOnStateChanges();
         layerListBox.setDisable(false);
     }
 
-    public void updateLayerListBox() {
-        ArrayList<Layer> layers = selectedDevice.getLayers();
-        ArrayList<String> layerItems = new ArrayList<>();
-        for (int i = 0; i < layers.size(); i++) {
-            Layer layer = layers.get(i);
-            if (layer.hasBuffer)
-                layerItems.add(String.format("Layer#%d:%s", i, layer.layerName));
-        }
-        layerListBox.getItems().setAll(layerItems);
-
-        int targetLayer = selectedDevice.getTargetLayer();
-        if (targetLayer != -1) {
-            layerListBox.setValue(String.format("Layer#%d:%s", targetLayer, layers.get(targetLayer).layerName));
-        }
-        updateUIOnStateChanges();
-    }
-
     public void handleLayerListBox() {
-        String layerName = layerListBox.getSelectionModel().getSelectedItem();
-        if (layerName != null) {
-            Matcher matcher = layerPattern.matcher(layerName);
-            if (matcher.find()) {
-                int idx = Integer.parseInt(matcher.group(1));
-                selectedDevice.setTargetLayer(idx, matcher.group(2));
-            }
+        Layer layer = layerListBox.getSelectionModel().getSelectedItem();
+        if (layer != null) {
+            selectedDevice.setTargetLayer(layer.id);
         }
         updateUIOnStateChanges();
     }
@@ -298,22 +271,21 @@ public class AppController implements Initializable {
         updateDeviceList();
         if (selectedDevice != null) {
             selectedDevice.updatePackageList();
-            updatePackageListBox();
+        } else {
+            propTable.getItems().clear();
         }
     }
 
     public void updateUIOnStateChanges() {
         if (selectedDevice == null || selectedDevice.getTargetPackage() == null
-                || selectedDevice.getTargetLayer() < 0) {
+                || selectedDevice.getTargetLayer() == null) {
             if (selectedDevice == null) {
                 deviceListBox.setPromptText("Select connected devices");
                 packageListBox.setPromptText("Select target package");
                 layerListBox.setPromptText("Select target app layer");
-                lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             } else if (selectedDevice.getTargetPackage() == null) {
                 packageListBox.setPromptText("Select target package");
                 layerListBox.setPromptText("Select target app layer");
-                lineChartMap.forEach((k, v)-> v.getData().forEach(series->series.getData().clear()));
             } else {
                 layerListBox.setPromptText("Select target app layer");
             }
@@ -325,6 +297,10 @@ public class AppController implements Initializable {
         if (selectedDevice.getPerfState()) {
             perfBtn.setText("End Perf");
         } else {
+            lineChartMap.forEach((k, v)-> v.getData().forEach(series->{
+                series.getData().clear();
+                series.getData().add(new XYChart.Data<>(0, 0));
+            }));
             perfBtn.setText("Start Perf");
         }
     }
