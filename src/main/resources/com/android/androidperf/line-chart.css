@@ -8,7 +8,7 @@
 .axis-label{
     -fx-font-size: 1.3em;
     -fx-font-weight: bolder;
-    -fx-font-family: 'serif';
+    -fx-font-family: 'ui-monospace';
     -fx-text-fill: #757575;
 }
 

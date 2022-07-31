@@ -23,10 +23,7 @@ import se.vidstige.jadb.JadbException;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.ResourceBundle;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -165,6 +162,7 @@ public class AppController implements Initializable {
     public final void addDataToChart(String chartName, XYChart.Data<Number, Number>... dataArrays) {
         LineChart<Number, Number> lineChart = lineChartMap.get(chartName);
 
+        double yMax = Double.MIN_VALUE;
         for (int i = 0; i < dataArrays.length; i++) {
             var data = dataArrays[i];
             var series = lineChart.getData().get(i).getData();
@@ -177,16 +175,23 @@ public class AppController implements Initializable {
                 xAxis.setTickUnit(xAxis.getTickUnit() + 1);
             }
 
-            int yVal = data.getYValue().intValue();
-            NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
-            double yBound = yAxis.getUpperBound();
-            double desiredBound = (int) (Math.ceil((yVal / 5.) + 1) * 5);
-            if (yBound < desiredBound || series.size() == 0) {
-                yBound = desiredBound;
-                yAxis.setUpperBound(yBound);
-                yAxis.setTickUnit(yBound / 5.);
+            Optional<XYChart.Data<Number, Number>> max = series.stream().max(Comparator.comparingDouble(fc -> fc.getYValue().doubleValue()));
+            if (max.isPresent()) {
+                double y = max.get().getYValue().doubleValue();
+                if (y > yMax)
+                    yMax = y;
             }
             series.add(data);
+        }
+
+        NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
+        int yBound = (int) yAxis.getUpperBound();
+        if (yMax == Double.MIN_VALUE)
+            yMax = yBound;
+        int desiredBound = (int) (Math.ceil((yMax / 5.) + 1) * 5);
+        if (yBound != desiredBound) {
+            yAxis.setUpperBound(desiredBound);
+            yAxis.setTickUnit(desiredBound / 5.);
         }
     }
 
@@ -263,6 +268,16 @@ public class AppController implements Initializable {
         if (selectedDevice.getPerfState()) {
             selectedDevice.endPerf();
         } else {
+            lineChartMap.forEach((k, v)-> {
+                ObservableList<XYChart.Series<Number, Number>> seriesList = v.getData();
+                ObservableList<XYChart.Series<Number, Number>> newSeriesList = FXCollections.observableArrayList();
+                for (XYChart.Series<Number, Number> series : seriesList) {
+                    XYChart.Series<Number, Number> newSeries = new XYChart.Series<>();
+                    newSeries.setName(series.getName());
+                    newSeriesList.add(newSeries);
+                }
+                v.setData(newSeriesList);
+            });
             selectedDevice.startPerf();
         }
     }
@@ -290,18 +305,14 @@ public class AppController implements Initializable {
                 layerListBox.setPromptText("Select target app layer");
             }
             perfBtn.setDisable(true);
-            perfBtn.setText("Start Perf");
+            perfBtn.setText("Start");
             return;
         }
         perfBtn.setDisable(false);
         if (selectedDevice.getPerfState()) {
-            perfBtn.setText("End Perf");
+            perfBtn.setText("End");
         } else {
-            lineChartMap.forEach((k, v)-> v.getData().forEach(series->{
-                series.getData().clear();
-                series.getData().add(new XYChart.Data<>(0, 0));
-            }));
-            perfBtn.setText("Start Perf");
+            perfBtn.setText("Start");
         }
     }
 

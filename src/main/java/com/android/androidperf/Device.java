@@ -293,6 +293,7 @@ public class Device {
         if (info.isEmpty()) {
             targetLayer = -1;
             Platform.runLater(layers::clear);
+            endPerf();
             return;
         }
         String[] layerList = info.split("\n");
