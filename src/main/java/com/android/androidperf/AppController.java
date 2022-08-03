@@ -243,7 +243,7 @@ public class AppController implements Initializable {
             if (!isChanged) {
                 String packageName = selectedDevice.getTargetPackage();
                 if (packageName != null && !packageName.isEmpty()) {
-                    selectedDevice.checkLayerChanges();
+                    selectedDevice.updateLayerList();
                 }
             }
         }

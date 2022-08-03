@@ -286,19 +286,18 @@ public class Device {
         return false;
     }
 
-    private synchronized void updateLayerList() {
+    public synchronized void updateLayerList() {
         HashMap<Integer, Layer> updatedLayerList = new HashMap<>();
-        String info = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
-        lastLayerList = info;
-        if (info.isEmpty()) {
+        String layerListInfo = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
+        if (layerListInfo.isEmpty()) {
             targetLayer = -1;
             Platform.runLater(layers::clear);
             endPerf();
             return;
         }
-        String[] layerList = info.split("\n");
+        String[] layerList = layerListInfo.split("\n");
 
-        info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'");
+        String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'");
 
         int idx = 0;
         targetLayer = -1;
@@ -333,8 +332,7 @@ public class Device {
                         int w = Integer.parseInt(bufferMatcher.group(1).strip());
                         int h = Integer.parseInt(bufferMatcher.group(2).strip());
                         layer = new Layer(layerName, w != 0 && h != 0, idx);
-                        info = info.replace(info.substring(start, end), "");
-                        info = info.replace(info.substring(bufferMatcher.start(), bufferMatcher.end()), "");
+                        info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                     }
                 }
                 if (layer != null) {
@@ -354,17 +352,11 @@ public class Device {
         Platform.runLater(() -> {
             layers.clear();
             layers.putAll(updatedLayerList);
+            lastLayerList = layerListInfo;
         });
         if (targetLayer == -1) {
             // no available layers, stop profiling
             endPerf();
-        }
-    }
-
-    void checkLayerChanges() {
-        String listInfo = execCmd(String.format("dumpsys SurfaceFlinger --list | grep '%s'", targetPackage));
-        if (lastLayerList.isEmpty() || !listInfo.contains(lastLayerList)) {
-            updateLayerList();
         }
     }
 
