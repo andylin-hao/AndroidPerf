@@ -84,9 +84,7 @@ public class AppController implements Initializable {
         valCol.prefWidthProperty().bind(propTable.widthProperty().multiply(0.62));
 
         // initialize line charts
-        initLineChart(lineChartFPS, "FPS", new String[]{"FPS"}, 60, 10, "FPS");
-        initLineChart(lineChartCPU, "CPU", new String[]{"App", "Total"}, 100, 20, "%");
-        initLineChart(lineChartNetwork, "Network", new String[]{"Recv", "Send"}, 1000, 100, "KB/s");
+        initAllLineCharts();
 
         // set layer list comboBox's event handler
         layerListBox.getSelectionModel().selectedItemProperty().addListener(
@@ -130,12 +128,20 @@ public class AppController implements Initializable {
         }
     }
 
+    private void initAllLineCharts() {
+        initLineChart(lineChartFPS, "FPS", new String[]{"FPS"}, 60, 10, "FPS");
+        initLineChart(lineChartCPU, "CPU", new String[]{"App", "Total"}, 100, 20, "%");
+        initLineChart(lineChartNetwork, "Network", new String[]{"Recv", "Send"}, 1000, 100, "KB/s");
+    }
+
     private void initLineChart(LineChart<Number, Number> lineChart, String chartName, String[] series, int yBound, int yTick, String yLabel) {
+        ObservableList<XYChart.Series<Number, Number>> seriesList = FXCollections.observableArrayList();
         for (String s : series) {
             XYChart.Series<Number, Number> data = new XYChart.Series<>();
             data.setName(s);
-            lineChart.getData().add(data);
+            seriesList.add(data);
         }
+        lineChart.setData(seriesList);
 
         lineChart.setAnimated(true);
         lineChart.setTitle(chartName);
@@ -268,16 +274,7 @@ public class AppController implements Initializable {
         if (selectedDevice.getPerfState()) {
             selectedDevice.endPerf();
         } else {
-            lineChartMap.forEach((k, v)-> {
-                ObservableList<XYChart.Series<Number, Number>> seriesList = v.getData();
-                ObservableList<XYChart.Series<Number, Number>> newSeriesList = FXCollections.observableArrayList();
-                for (XYChart.Series<Number, Number> series : seriesList) {
-                    XYChart.Series<Number, Number> newSeries = new XYChart.Series<>();
-                    newSeries.setName(series.getName());
-                    newSeriesList.add(newSeries);
-                }
-                v.setData(newSeriesList);
-            });
+            initAllLineCharts();
             selectedDevice.startPerf();
         }
     }
