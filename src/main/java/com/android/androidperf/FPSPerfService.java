@@ -33,6 +33,8 @@ public class FPSPerfService extends BasePerfService {
         int sdkVersion = device.getSdkVersion();
         if (sdkVersion == 24 || sdkVersion == 25) {
             dataLines = latencyData.split("\n\n");
+            if (layer.id >= dataLines.length)
+                return new ArrayList<>();
             latencyData = dataLines[layer.id];
         }
         dataLines = latencyData.split("\n");
