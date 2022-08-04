@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -278,8 +279,10 @@ public class Device {
         String packageName = packageInfo[0];
         if (packageInfo.length == 2 && !packageList.get(0).equals(packageName)) {
             Platform.runLater(() -> {
-                packageList.remove(packageName);
-                packageList.add(0, packageName);
+                int index = packageList.indexOf(packageName);
+                if (index != -1) {
+                    Collections.swap(packageList, index, 0);
+                }
             });
             return true;
         }
@@ -292,7 +295,6 @@ public class Device {
         if (layerListInfo.isEmpty()) {
             targetLayer = -1;
             Platform.runLater(layers::clear);
-            endPerf();
             return;
         }
         String[] layerList = layerListInfo.split("\n");
@@ -354,10 +356,6 @@ public class Device {
             layers.putAll(updatedLayerList);
             lastLayerList = layerListInfo;
         });
-        if (targetLayer == -1) {
-            // no available layers, stop profiling
-            endPerf();
-        }
     }
 
     String execCmd(String cmd, String... args) {

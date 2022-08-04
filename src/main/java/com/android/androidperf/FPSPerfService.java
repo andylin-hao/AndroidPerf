@@ -47,10 +47,13 @@ public class FPSPerfService extends BasePerfService {
             String[] frameTimestamps = frameData.split("\\s");
             if (frameTimestamps.length != 3)
                 continue;
-            long actualPresentTime = Long.parseLong(frameTimestamps[1]);
-            if (actualPresentTime == Long.MAX_VALUE)
-                continue;
-            results.add(actualPresentTime);
+            try {
+                long actualPresentTime = Long.parseLong(frameTimestamps[1]);
+                if (actualPresentTime == Long.MAX_VALUE)
+                    continue;
+                results.add(actualPresentTime);
+            } catch (Exception ignored) {
+            }
         }
 
         return results;

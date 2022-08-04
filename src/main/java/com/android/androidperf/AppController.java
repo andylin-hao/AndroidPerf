@@ -289,22 +289,18 @@ public class AppController implements Initializable {
     }
 
     public void updateUIOnStateChanges() {
-        if (selectedDevice == null || selectedDevice.getTargetPackage() == null
-                || selectedDevice.getTargetLayer() == null) {
+        if (selectedDevice == null || selectedDevice.getTargetPackage() == null) {
             if (selectedDevice == null) {
                 deviceListBox.setPromptText("Select connected devices");
-                packageListBox.setPromptText("Select target package");
-                layerListBox.setPromptText("Select target app layer");
-            } else if (selectedDevice.getTargetPackage() == null) {
-                packageListBox.setPromptText("Select target package");
-                layerListBox.setPromptText("Select target app layer");
-            } else {
-                layerListBox.setPromptText("Select target app layer");
             }
+            packageListBox.setPromptText("Select target package");
+            layerListBox.setPromptText("Select target app layer");
             perfBtn.setDisable(true);
             perfBtn.setText("Start");
             return;
         }
+        if (selectedDevice.getTargetLayer() == null)
+            layerListBox.setPromptText("Select target app layer");
         perfBtn.setDisable(false);
         if (selectedDevice.getPerfState()) {
             perfBtn.setText("End");
