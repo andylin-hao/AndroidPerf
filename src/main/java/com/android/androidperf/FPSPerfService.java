@@ -13,7 +13,8 @@ public class FPSPerfService extends BasePerfService {
     boolean targetShouldChange = true;
 
     void clearLatencyData() {
-        device.getLayers().forEach(layer -> device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName)));
+        var layers = new ArrayList<>(device.getLayers());
+        layers.forEach(layer -> device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName)));
     }
 
     ArrayList<Long> acquireLatencyData(Layer layer) {
