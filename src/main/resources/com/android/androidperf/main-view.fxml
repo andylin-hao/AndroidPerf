@@ -5,7 +5,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
+<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
     <items>
         <AnchorPane minHeight="0.0" minWidth="0.0">
             <children>
@@ -19,11 +19,6 @@
                             <VBox.margin>
                                 <Insets left="10.0" right="10.0" top="40.0" />
                             </VBox.margin></ComboBox>
-                  <ComboBox fx:id="layerListBox" maxWidth="1.7976931348623157E308" prefWidth="150.0">
-                     <VBox.margin>
-                        <Insets left="10.0" right="10.0" top="10.0" />
-                     </VBox.margin>
-                  </ComboBox>
                   <AnchorPane prefHeight="200.0" prefWidth="200.0">
                      <children>
                         <TableView fx:id="propTable" maxHeight="1.7976931348623157E308" stylesheets="@table-view.css" AnchorPane.bottomAnchor="20.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" />

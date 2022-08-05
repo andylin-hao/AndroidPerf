@@ -35,8 +35,6 @@ public class AppController implements Initializable {
     @FXML
     private ComboBox<String> packageListBox;
     @FXML
-    private ComboBox<Layer> layerListBox;
-    @FXML
     private TableView<DeviceProp> propTable;
     @FXML
     private Button perfBtn;
@@ -47,7 +45,6 @@ public class AppController implements Initializable {
     @FXML
     private LineChart<Number, Number> lineChartNetwork;
     private final HashMap<String, LineChart<Number, Number>> lineChartMap = new HashMap<>();
-    private MapChangeListener<? super Integer, ? super Layer> layerListener = null;
 
     public Device selectedDevice;
     private final HashMap<String, Device> deviceMap = new HashMap<>();
@@ -59,7 +56,7 @@ public class AppController implements Initializable {
         updateDeviceList();
 
         // autocompletion for package list
-        new AutoCompleteComboBoxListener<>(packageListBox);
+//        new AutoCompleteComboBoxListener<>(packageListBox);
 
         // initialize property table
         TableColumn<DeviceProp, String> nameCol = new TableColumn<>("Property");
@@ -85,8 +82,6 @@ public class AppController implements Initializable {
         // UI update
         updateUIOnStateChanges();
         packageListBox.setDisable(true);
-        layerListBox.setDisable(true);
-        layerListBox.setVisible(false);
 
         // activate auto refresh task
         executorService.scheduleAtFixedRate(this::refreshTask, 500, 500, TimeUnit.MILLISECONDS);
@@ -201,24 +196,10 @@ public class AppController implements Initializable {
         selectedDevice = deviceMap.get(deviceID);
 
         propTable.getItems().clear();
-        layerListBox.getItems().clear();
 
         // initialize the package list
         packageListBox.setItems(selectedDevice.getPackageList());
         packageListBox.setEditable(true);
-
-        // bind the layer list to the data source
-        ObservableMap<Integer, Layer> layers = selectedDevice.getLayers();
-        if (layerListener != null)
-            layers.removeListener(layerListener);
-        layerListener = (MapChangeListener<Integer, Layer>) change -> {
-            layerListBox.getItems().setAll(layers.values());
-            Layer targetLayer = selectedDevice.getTargetLayer();
-            if (targetLayer != null)
-                layerListBox.setValue(targetLayer);
-            updateUIOnStateChanges();
-        };
-        layers.addListener(layerListener);
 
         // initialize basic properties of the device
         ArrayList<DeviceProp> props = selectedDevice.getProps();
@@ -252,7 +233,6 @@ public class AppController implements Initializable {
 
         // UI update
         updateUIOnStateChanges();
-        layerListBox.setDisable(false);
     }
 
     public void handlePerfBtn() {
@@ -279,13 +259,10 @@ public class AppController implements Initializable {
                 deviceListBox.setPromptText("Select connected devices");
             }
             packageListBox.setPromptText("Select target package");
-            layerListBox.setPromptText("Select target app layer");
             perfBtn.setDisable(true);
             perfBtn.setText("Start");
             return;
         }
-        if (selectedDevice.getTargetLayer() == null)
-            layerListBox.setPromptText("Select target app layer");
         perfBtn.setDisable(false);
         if (selectedDevice.getPerfState()) {
             perfBtn.setText("End");
@@ -297,79 +274,5 @@ public class AppController implements Initializable {
     public void shutdown() {
         deviceMap.forEach((s, device) -> device.shutdown());
         executorService.shutdownNow();
-    }
-
-    static class AutoCompleteComboBoxListener<T> implements EventHandler<KeyEvent> {
-        private final ComboBox<T> comboBox;
-        private final ObservableList<T> data;
-        private boolean moveCaretToPos = false;
-        private int caretPos;
-
-        public AutoCompleteComboBoxListener(final ComboBox<T> comboBox) {
-            this.comboBox = comboBox;
-            data = comboBox.getItems();
-
-            this.comboBox.setEditable(true);
-            this.comboBox.setOnKeyPressed(t -> comboBox.hide());
-            this.comboBox.setOnKeyReleased(AutoCompleteComboBoxListener.this);
-        }
-
-        @Override
-        public void handle(KeyEvent event) {
-            if(event.getCode() == KeyCode.UP) {
-                caretPos = -1;
-                moveCaret(comboBox.getEditor().getText().length());
-                return;
-            } else if(event.getCode() == KeyCode.DOWN) {
-                if(!comboBox.isShowing()) {
-                    comboBox.show();
-                }
-                caretPos = -1;
-                moveCaret(comboBox.getEditor().getText().length());
-                return;
-            } else if(event.getCode() == KeyCode.BACK_SPACE) {
-                moveCaretToPos = true;
-                caretPos = comboBox.getEditor().getCaretPosition();
-            } else if(event.getCode() == KeyCode.DELETE) {
-                moveCaretToPos = true;
-                caretPos = comboBox.getEditor().getCaretPosition();
-            }
-
-            if (event.getCode() == KeyCode.RIGHT || event.getCode() == KeyCode.LEFT
-                    || event.isControlDown() || event.getCode() == KeyCode.HOME
-                    || event.getCode() == KeyCode.END || event.getCode() == KeyCode.TAB) {
-                return;
-            }
-
-            ObservableList<T> list = FXCollections.observableArrayList();
-            for (T datum : data) {
-                if (datum.toString().toLowerCase().contains(
-                        AutoCompleteComboBoxListener.this.comboBox
-                                .getEditor().getText().toLowerCase())) {
-                    list.add(datum);
-                }
-            }
-            String t = comboBox.getEditor().getText();
-
-            comboBox.setItems(list);
-            comboBox.getEditor().setText(t);
-            if(!moveCaretToPos) {
-                caretPos = -1;
-            }
-            moveCaret(t.length());
-            if(!list.isEmpty()) {
-                comboBox.show();
-            }
-        }
-
-        private void moveCaret(int textLength) {
-            if(caretPos == -1) {
-                comboBox.getEditor().positionCaret(textLength);
-            } else {
-                comboBox.getEditor().positionCaret(caretPos);
-            }
-            moveCaretToPos = false;
-        }
-
     }
 }
