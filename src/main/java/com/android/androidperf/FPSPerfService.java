@@ -13,7 +13,7 @@ public class FPSPerfService extends BasePerfService {
     boolean targetShouldChange = true;
 
     void clearLatencyData() {
-        device.getLayers().forEach((id, layer) -> device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName)));
+        device.getLayers().forEach(layer -> device.execCmd(String.format("dumpsys SurfaceFlinger --latency-clear '%s'", layer.layerName)));
     }
 
     ArrayList<Long> acquireLatencyData(Layer layer) {
@@ -29,10 +29,8 @@ public class FPSPerfService extends BasePerfService {
         // Data look like [desiredPresentTime] [actualPresentTime] [frameReadyTime]
         // All timestamps are in nanoseconds. We use actualPresentTime to calculate frame time
         latencyData = latencyData.replace("\r\n", "\n");
-        String[] dataLines;
-        int sdkVersion = device.getSdkVersion();
-        if (sdkVersion == 24 || sdkVersion == 25) {
-            dataLines = latencyData.split("\n\n");
+        String[] dataLines = latencyData.split("\n\n");
+        if (dataLines.length > 1) {
             if (layer.id >= dataLines.length)
                 return new ArrayList<>();
             latencyData = dataLines[layer.id];
@@ -113,7 +111,7 @@ public class FPSPerfService extends BasePerfService {
     }
 
     void updateTargetLayer() {
-        var layers = new ArrayList<>(device.getLayers().values());
+        var layers = new ArrayList<>(device.getLayers());
         for (var layer : layers) {
             var frameResults = acquireLatencyData(layer);
             if (isLayerActive(frameResults)) {

@@ -1,10 +1,7 @@
 package com.android.androidperf;
 
 import javafx.collections.FXCollections;
-import javafx.collections.MapChangeListener;
 import javafx.collections.ObservableList;
-import javafx.collections.ObservableMap;
-import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Side;
@@ -12,8 +9,6 @@ import javafx.scene.chart.LineChart;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
 import javafx.scene.text.Text;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -26,7 +21,6 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 public class AppController implements Initializable {
     private static final Logger LOGGER = LogManager.getLogger(AppController.class);
@@ -54,9 +48,6 @@ public class AppController implements Initializable {
     public void initialize(URL url, ResourceBundle resourceBundle) {
         // initialize the device list
         updateDeviceList();
-
-        // autocompletion for package list
-//        new AutoCompleteComboBoxListener<>(packageListBox);
 
         // initialize property table
         TableColumn<DeviceProp, String> nameCol = new TableColumn<>("Property");
@@ -194,6 +185,8 @@ public class AppController implements Initializable {
             selectedDevice.endPerf();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
+        if (selectedDevice == null)
+            return;
 
         propTable.getItems().clear();
 

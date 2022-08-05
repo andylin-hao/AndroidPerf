@@ -3,7 +3,6 @@ package com.android.androidperf;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.collections.ObservableMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbConnection;
@@ -41,8 +40,7 @@ public class Device {
     private final ArrayList<DeviceProp> props = new ArrayList<>();
 
     private final ArrayList<BasePerfService> services = new ArrayList<>();
-    private final ObservableMap<Integer, Layer> layers = FXCollections.observableHashMap();
-    private String lastLayerList = "";
+    private final ArrayList<Layer> layers = new ArrayList<>();
     private final ObservableList<String> packageList = FXCollections.observableArrayList();
     private String targetPackage;
 
@@ -287,23 +285,22 @@ public class Device {
     }
 
     public synchronized void updateLayerList() {
-        HashMap<Integer, Layer> updatedLayerList = new HashMap<>();
+        ArrayList<Layer> updatedLayerList = new ArrayList<>();
         String layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
         String[] layerListFull = layerListInfo.split("\n");
         LinkedBlockingDeque<String> layerList = Arrays.stream(layerListFull)
                 .filter(str -> str.contains(targetPackage)).collect(Collectors.toCollection(LinkedBlockingDeque::new));
         if (layerList.isEmpty()) {
-            Platform.runLater(layers::clear);
+            layers.clear();
             return;
         }
 
         String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer|parent'");
 
-        int idx = 0;
-
         Pattern pattern;
         Matcher matcher;
         Matcher bufferMatcher;
+        HashMap<String, Integer> idMap = new HashMap<>();
 
         while (!layerList.isEmpty()) {
             String layerName = layerList.poll();
@@ -324,7 +321,9 @@ public class Device {
                 bufferMatcher = bufferStatsPatternR.matcher(bufferInfo);
                 if (bufferMatcher.find()) {
                     long bufferSlot = Long.parseLong(bufferMatcher.group(1).strip());
-                    layer = new Layer(layerName, bufferSlot != -1, idx);
+                    int id = idMap.getOrDefault(layerName, 0);
+                    layer = new Layer(layerName, bufferSlot != -1, id);
+                    idMap.put(layerName, id + 1);
                     info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                 } else {
                     // + Layer 0x7f162ba23000 (StatusBar#0)
@@ -333,25 +332,23 @@ public class Device {
                     if (bufferMatcher.find()) {
                         int w = Integer.parseInt(bufferMatcher.group(1).strip());
                         int h = Integer.parseInt(bufferMatcher.group(2).strip());
-                        layer = new Layer(layerName, w != 0 && h != 0, idx);
+                        int id = idMap.getOrDefault(layerName, 0);
+                        layer = new Layer(layerName, w != 0 && h != 0, id);
+                        idMap.put(layerName, id + 1);
                         info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                     }
                 }
                 if (layer != null) {
                     if (layer.hasBuffer) {
-                        updatedLayerList.put(idx, layer);
+                        updatedLayerList.add(layer);
                     }
-                    idx++;
                 }
             } else
                 LOGGER.error(String.format("Cannot find %s in dumpsys info: %s", layerName, info));
         }
 
-        Platform.runLater(() -> {
-            layers.clear();
-            layers.putAll(updatedLayerList);
-            lastLayerList = layerListInfo;
-        });
+        layers.clear();
+        layers.addAll(updatedLayerList);
     }
 
     private ArrayList<String> findChildrenLayers(String parent, String info, String[] layerListFull) {
@@ -398,7 +395,7 @@ public class Device {
         return targetPackage;
     }
 
-    public ObservableMap<Integer, Layer> getLayers() {
+    public ArrayList<Layer> getLayers() {
         return layers;
     }
 
@@ -406,56 +403,12 @@ public class Device {
         return controller;
     }
 
-    public int getSdkVersion() {
-        return sdkVersion;
-    }
-
     public String getDeviceADBID() {
         return deviceADBID;
     }
 
-    public String getAndroidVersion() {
-        return androidVersion;
-    }
-
-    public String getDeviceName() {
-        return deviceName;
-    }
-
-    public String getAbiList() {
-        return abiList;
-    }
-
-    public String getGlVendor() {
-        return glVendor;
-    }
-
-    public String getGlRenderer() {
-        return glRenderer;
-    }
-
-    public String getGlVersion() {
-        return glVersion;
-    }
-
     public int getCpuCores() {
         return cpuCores;
-    }
-
-    public String getCpuModel() {
-        return cpuModel;
-    }
-
-    public double getMemSize() {
-        return memSize;
-    }
-
-    public double getStorageSize() {
-        return storageSize;
-    }
-
-    public ArrayList<String> getCpuFrequencies() {
-        return cpuFrequencies;
     }
 
     public ObservableList<String> getPackageList() {
