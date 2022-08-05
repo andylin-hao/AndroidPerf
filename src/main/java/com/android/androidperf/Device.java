@@ -13,12 +13,11 @@ import se.vidstige.jadb.JadbException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.*;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class Device {
     private static final Logger LOGGER = LogManager.getLogger(Device.class);
@@ -56,7 +55,6 @@ public class Device {
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\((.*)\\).*");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
-
     Device(JadbDevice device, AppController appController) {
         jadbDevice = device;
         controller = appController;
@@ -297,9 +295,10 @@ public class Device {
             Platform.runLater(layers::clear);
             return;
         }
-        String[] layerList = layerListInfo.split("\n");
+        LinkedBlockingDeque<String> layerList = new LinkedBlockingDeque<>();
+        Collections.addAll(layerList, layerListInfo.split("\n"));
 
-        String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer'");
+        String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer|parent'");
 
         int idx = 0;
         targetLayer = -1;
@@ -307,8 +306,10 @@ public class Device {
         Pattern pattern;
         Matcher matcher;
         Matcher bufferMatcher;
-        for (var layerName : layerList) {
-            pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((.*%s.*)\\).*", Pattern.quote(layerName)));
+
+        while (!layerList.isEmpty()) {
+            String layerName = layerList.poll();
+            pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((%s.*)\\).*", Pattern.quote(layerName)));
             matcher = pattern.matcher(info);
             if (matcher.find()) {
                 int end = matcher.end();
@@ -318,6 +319,7 @@ public class Device {
                 if (matcher.find())
                     bufferInfo = bufferInfo.substring(0, matcher.start());
                 Layer layer = null;
+                layerList.addAll(findChildrenLayers(layerName, info).stream().filter(i -> !layerList.contains(i)).collect(Collectors.toList()));
 
                 // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
                 //      buffer: buffer=0x7615a547b140 slot=2
@@ -342,8 +344,14 @@ public class Device {
                         updatedLayerList.put(idx, layer);
                         if (layer.isSurfaceView && targetLayer == -1)
                             targetLayer = idx;
-                        else if (targetLayer == -1)
-                            targetLayer = idx;
+                        else if (layer.isSurfaceView) {
+                            if (!updatedLayerList.get(targetLayer).isSurfaceView)
+                                targetLayer = idx;
+                        }
+                        else {
+                            if (targetLayer == -1 || !updatedLayerList.get(targetLayer).isSurfaceView)
+                                targetLayer = idx;
+                        }
                     }
                     idx++;
                 }
@@ -356,6 +364,19 @@ public class Device {
             layers.putAll(updatedLayerList);
             lastLayerList = layerListInfo;
         });
+    }
+
+    private ArrayList<String> findChildrenLayers(String parent, String info) {
+        Pattern parentPattern = Pattern.compile(String.format("parent=(%s)", Pattern.quote(parent)));
+        Matcher matcher = parentPattern.matcher(info);
+        ArrayList<String> children = new ArrayList<>();
+        while (matcher.find()) {
+            String layerInfo = info.substring(0, matcher.start());
+            Matcher layerMatcher = layerNamePattern.matcher(layerInfo);
+            List<String> matches = layerMatcher.results().map((r)-> r.group(1)).collect(Collectors.toList());
+            children.add(matches.get(matches.size() - 1));
+        }
+        return children;
     }
 
     String execCmd(String cmd, String... args) {

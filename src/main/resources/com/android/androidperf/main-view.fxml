@@ -17,11 +17,11 @@
                             </VBox.margin></ComboBox>
                         <ComboBox fx:id="packageListBox" maxWidth="1.7976931348623157E308" onAction="#handlePackageListBox" prefWidth="150.0">
                             <VBox.margin>
-                                <Insets left="10.0" right="10.0" top="20.0" />
+                                <Insets left="10.0" right="10.0" top="40.0" />
                             </VBox.margin></ComboBox>
                   <ComboBox fx:id="layerListBox" maxWidth="1.7976931348623157E308" prefWidth="150.0">
                      <VBox.margin>
-                        <Insets left="10.0" right="10.0" top="20.0" />
+                        <Insets left="10.0" right="10.0" top="10.0" />
                      </VBox.margin>
                   </ComboBox>
                   <AnchorPane prefHeight="200.0" prefWidth="200.0">
@@ -39,7 +39,7 @@
                               <Insets right="10.0" />
                            </HBox.margin>
                         </Button>
-                        <Button mnemonicParsing="false" text="Update" onMouseClicked="#handleUpdateBtn">
+                        <Button mnemonicParsing="false" onMouseClicked="#handleUpdateBtn" text="Update">
                            <HBox.margin>
                               <Insets left="10.0" />
                            </HBox.margin>

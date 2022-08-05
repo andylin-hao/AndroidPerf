@@ -1,6 +1,5 @@
 package com.android.androidperf;
 
-import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.MapChangeListener;
 import javafx.collections.ObservableList;
@@ -25,10 +24,8 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class AppController implements Initializable {
@@ -54,7 +51,6 @@ public class AppController implements Initializable {
 
     public Device selectedDevice;
     private final HashMap<String, Device> deviceMap = new HashMap<>();
-    private final Pattern layerPattern = Pattern.compile("Layer#(\\d*):(.*)");
     private final ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
 
     @Override
@@ -86,14 +82,11 @@ public class AppController implements Initializable {
         // initialize line charts
         initAllLineCharts();
 
-        // set layer list comboBox's event handler
-        layerListBox.getSelectionModel().selectedItemProperty().addListener(
-                (options, oldValue, newValue) -> handleLayerListBox());
-
         // UI update
         updateUIOnStateChanges();
         packageListBox.setDisable(true);
         layerListBox.setDisable(true);
+        layerListBox.setVisible(false);
 
         // activate auto refresh task
         executorService.scheduleAtFixedRate(this::refreshTask, 500, 500, TimeUnit.MILLISECONDS);
@@ -260,14 +253,6 @@ public class AppController implements Initializable {
         // UI update
         updateUIOnStateChanges();
         layerListBox.setDisable(false);
-    }
-
-    public void handleLayerListBox() {
-        Layer layer = layerListBox.getSelectionModel().getSelectedItem();
-        if (layer != null) {
-            selectedDevice.setTargetLayer(layer.id);
-        }
-        updateUIOnStateChanges();
     }
 
     public void handlePerfBtn() {
