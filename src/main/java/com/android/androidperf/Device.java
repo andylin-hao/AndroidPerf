@@ -403,12 +403,56 @@ public class Device {
         return controller;
     }
 
+    public int getSdkVersion() {
+        return sdkVersion;
+    }
+
     public String getDeviceADBID() {
         return deviceADBID;
     }
 
+    public String getAndroidVersion() {
+        return androidVersion;
+    }
+
+    public String getDeviceName() {
+        return deviceName;
+    }
+
+    public String getAbiList() {
+        return abiList;
+    }
+
+    public String getGlVendor() {
+        return glVendor;
+    }
+
+    public String getGlRenderer() {
+        return glRenderer;
+    }
+
+    public String getGlVersion() {
+        return glVersion;
+    }
+
     public int getCpuCores() {
         return cpuCores;
+    }
+
+    public String getCpuModel() {
+        return cpuModel;
+    }
+
+    public double getMemSize() {
+        return memSize;
+    }
+
+    public double getStorageSize() {
+        return storageSize;
+    }
+
+    public ArrayList<String> getCpuFrequencies() {
+        return cpuFrequencies;
     }
 
     public ObservableList<String> getPackageList() {
