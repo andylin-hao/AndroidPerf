@@ -185,8 +185,12 @@ public class AppController implements Initializable {
             selectedDevice.endPerf();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
-        if (selectedDevice == null)
-            return;
+        if (selectedDevice == null) {
+            if (deviceMap.size() > 0) {
+                selectedDevice = (Device) deviceMap.values().toArray()[0];
+            }
+            else return;
+        }
 
         propTable.getItems().clear();
 

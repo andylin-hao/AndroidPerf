@@ -50,6 +50,7 @@ public class Device {
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer \\(.*\\).*");
+    private static final Pattern layerNamePatternN = Pattern.compile("[*+] .*Layer.*\\(.*\\).*");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
     Device(JadbDevice device, AppController appController) {
@@ -310,7 +311,10 @@ public class Device {
                 int end = matcher.end();
                 int start = matcher.start();
                 String bufferInfo = info.substring(end);
-                matcher = layerNamePattern.matcher(bufferInfo);
+                if (sdkVersion == 24 || sdkVersion == 25)
+                    matcher = layerNamePatternN.matcher(bufferInfo);
+                else
+                    matcher = layerNamePattern.matcher(bufferInfo);
                 if (matcher.find())
                     bufferInfo = bufferInfo.substring(0, matcher.start());
                 Layer layer = null;
@@ -357,7 +361,11 @@ public class Device {
         ArrayList<String> children = new ArrayList<>();
         while (matcher.find()) {
             String layerInfo = info.substring(0, matcher.start());
-            Matcher layerMatcher = layerNamePattern.matcher(layerInfo);
+            Matcher layerMatcher;
+            if (sdkVersion == 24 || sdkVersion == 25)
+                layerMatcher = layerNamePatternN.matcher(layerInfo);
+            else
+                layerMatcher = layerNamePattern.matcher(layerInfo);
             List<String> matches = layerMatcher.results().map((r)-> layerInfo.substring(r.start(), r.end())).collect(Collectors.toList());
             String name = matches.get(matches.size() - 1);
             if (name != null) {

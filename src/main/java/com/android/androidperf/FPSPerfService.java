@@ -114,9 +114,11 @@ public class FPSPerfService extends BasePerfService {
     void updateTargetLayer() {
         var layers = new ArrayList<>(device.getLayers());
         for (var layer : layers) {
+            System.out.println(layer);
             var frameResults = acquireLatencyData(layer);
             if (isLayerActive(frameResults)) {
                 if (layer.isSurfaceView) {
+                    System.out.println("Target: " + layer);
                     targetLayer = layer;
                     targetShouldChange = false;
                     break;
@@ -127,6 +129,7 @@ public class FPSPerfService extends BasePerfService {
             }
 
         }
+        System.out.println("-------------------");
     }
 
     @Override
