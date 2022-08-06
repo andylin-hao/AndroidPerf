@@ -12,6 +12,7 @@ import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.*;
 import javafx.scene.text.Text;
+import javafx.util.StringConverter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbDevice;
@@ -132,6 +133,19 @@ public class AppController implements Initializable {
         xAxis.setUpperBound(60);
         xAxis.setTickUnit(4);
         xAxis.setAutoRanging(false);
+        xAxis.setMinorTickVisible(false);
+        xAxis.setTickLabelFormatter(new StringConverter<>() {
+            @Override
+            public String toString(Number number) {
+                long time = number.longValue();
+                return String.format("%d:%02d", time / 60, time % 60);
+            }
+
+            @Override
+            public Number fromString(String s) {
+                return null;
+            }
+        });
 
         NumberAxis yAxis = (NumberAxis) lineChart.getYAxis();
         yAxis.setLowerBound(0);
@@ -139,6 +153,7 @@ public class AppController implements Initializable {
         yAxis.setTickUnit(yTick);
         yAxis.setLabel(yLabel);
         yAxis.setAutoRanging(false);
+        yAxis.setMinorTickVisible(false);
 
         lineChart.setLegendSide(Side.RIGHT);
 

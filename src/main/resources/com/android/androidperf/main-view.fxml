@@ -5,7 +5,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<SplitPane dividerPositions="0.3" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1024.0" prefHeight="768.0" prefWidth="1024.0" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
+<SplitPane dividerPositions="0.26291079812206575" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="768.0" minWidth="1280.0" prefHeight="768.0" prefWidth="1280.0" xmlns="http://javafx.com/javafx/17.0.2-ea" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.android.androidperf.AppController">
     <items>
         <AnchorPane minHeight="0.0" minWidth="0.0">
             <children>
