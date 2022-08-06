@@ -265,7 +265,7 @@ public class Device {
         Platform.runLater(() -> packageList.setAll(packages));
     }
 
-    public boolean checkCurrentPackage() {
+    public void checkCurrentPackage() {
         String info = execCmd("dumpsys window | grep mCurrentFocus");
         String[] activityInfo = info.split(" ");
         String focusedWindow = activityInfo[activityInfo.length - 1];
@@ -274,14 +274,9 @@ public class Device {
         String packageName = packageInfo[0];
         if (packageInfo.length == 2 && !packageList.get(0).equals(packageName)) {
             Platform.runLater(() -> {
-                int index = packageList.indexOf(packageName);
-                if (index != -1) {
-                    Collections.swap(packageList, index, 0);
-                }
+                controller.movePackageToFront(packageName);
             });
-            return true;
         }
-        return false;
     }
 
     public synchronized boolean updateLayerList() {

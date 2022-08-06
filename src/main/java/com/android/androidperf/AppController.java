@@ -2,6 +2,8 @@ package com.android.androidperf;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.geometry.Side;
@@ -196,7 +198,6 @@ public class AppController implements Initializable {
 
         // initialize the package list
         packageListBox.setItems(selectedDevice.getPackageList());
-        packageListBox.setEditable(true);
 
         // initialize basic properties of the device
         ArrayList<DeviceProp> props = selectedDevice.getProps();
@@ -212,6 +213,20 @@ public class AppController implements Initializable {
         if (selectedDevice != null) {
             selectedDevice.checkCurrentPackage();
         }
+    }
+
+    public void movePackageToFront(String packageName) {
+        EventHandler<ActionEvent> handler = packageListBox.getOnAction();
+        packageListBox.setOnAction(null);
+        String selected = packageListBox.getSelectionModel().getSelectedItem();
+        var packageList = selectedDevice.getPackageList();
+        packageList.remove(packageName);
+        packageList.add(0, packageName);
+        if (selected != null) {
+            packageListBox.getSelectionModel().select(selected);
+            packageListBox.setValue(selected);
+        }
+        packageListBox.setOnAction(handler);
     }
 
     public void handlePackageListBox() {
