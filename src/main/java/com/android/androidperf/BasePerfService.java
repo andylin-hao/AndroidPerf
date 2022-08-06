@@ -22,8 +22,10 @@ public class BasePerfService extends Thread {
         dumpTask = executorService.scheduleAtFixedRate(this::dump, 1000, 1000, TimeUnit.MILLISECONDS);
     }
     void end() {
-        updateTask.cancel(true);
-        dumpTask.cancel(true);
+        if (updateTask != null)
+            updateTask.cancel(true);
+        if (dumpTask != null)
+            dumpTask.cancel(true);
         dumpTimer = 0;
         dataQueue.clear();
     }

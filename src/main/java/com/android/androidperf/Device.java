@@ -49,8 +49,7 @@ public class Device {
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
-    private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer \\(.*\\).*");
-    private static final Pattern layerNamePatternN = Pattern.compile("[*+] .*Layer.*\\(.*\\).*");
+    private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\(.*\\).*");
     private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
     Device(JadbDevice device, AppController appController) {
@@ -285,15 +284,16 @@ public class Device {
         return false;
     }
 
-    public synchronized void updateLayerList() {
+    public synchronized boolean updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
         String layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
         String[] layerListFull = layerListInfo.split("\n");
         LinkedBlockingDeque<String> layerList = Arrays.stream(layerListFull)
                 .filter(str -> str.contains(targetPackage)).collect(Collectors.toCollection(LinkedBlockingDeque::new));
         if (layerList.isEmpty()) {
+            boolean isChanged = !layers.isEmpty();
             layers.clear();
-            return;
+            return isChanged;
         }
 
         String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer|parent'");
@@ -307,16 +307,13 @@ public class Device {
             String layerName = layerList.poll();
             pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((%s.*)\\).*", Pattern.quote(layerName)));
             matcher = pattern.matcher(info);
-            if (matcher.find()) {
+            while (matcher.find()) {
                 int end = matcher.end();
                 int start = matcher.start();
                 String bufferInfo = info.substring(end);
-                if (sdkVersion == 24 || sdkVersion == 25)
-                    matcher = layerNamePatternN.matcher(bufferInfo);
-                else
-                    matcher = layerNamePattern.matcher(bufferInfo);
-                if (matcher.find())
-                    bufferInfo = bufferInfo.substring(0, matcher.start());
+                Matcher layerMatcher = layerNamePattern.matcher(bufferInfo);
+                if (layerMatcher.find())
+                    bufferInfo = bufferInfo.substring(0, layerMatcher.start());
                 Layer layer = null;
                 layerList.addAll(findChildrenLayers(layerName, info, layerListFull).stream().filter(i -> !layerList.contains(i)).collect(Collectors.toList()));
 
@@ -324,35 +321,34 @@ public class Device {
                 //      buffer: buffer=0x7615a547b140 slot=2
                 bufferMatcher = bufferStatsPatternR.matcher(bufferInfo);
                 if (bufferMatcher.find()) {
-                    long bufferSlot = Long.parseLong(bufferMatcher.group(1).strip());
+                    continue;
+                }
+
+                // + Layer 0x7f162ba23000 (StatusBar#0)
+                //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
+                bufferMatcher = bufferStatsPattern.matcher(bufferInfo);
+                if (bufferMatcher.find()) {
+                    int w = Integer.parseInt(bufferMatcher.group(1).strip());
+                    int h = Integer.parseInt(bufferMatcher.group(2).strip());
                     int id = idMap.getOrDefault(layerName, 0);
-                    layer = new Layer(layerName, bufferSlot != -1, id);
+                    layer = new Layer(layerName, w != 0 && h != 0, id);
                     idMap.put(layerName, id + 1);
                     info = info.replace(info.substring(start, end + bufferInfo.length()), "");
-                } else {
-                    // + Layer 0x7f162ba23000 (StatusBar#0)
-                    //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
-                    bufferMatcher = bufferStatsPattern.matcher(bufferInfo);
-                    if (bufferMatcher.find()) {
-                        int w = Integer.parseInt(bufferMatcher.group(1).strip());
-                        int h = Integer.parseInt(bufferMatcher.group(2).strip());
-                        int id = idMap.getOrDefault(layerName, 0);
-                        layer = new Layer(layerName, w != 0 && h != 0, id);
-                        idMap.put(layerName, id + 1);
-                        info = info.replace(info.substring(start, end + bufferInfo.length()), "");
-                    }
-                }
-                if (layer != null) {
                     if (layer.hasBuffer) {
                         updatedLayerList.add(layer);
                     }
+                    break;
                 }
-            } else
-                LOGGER.error(String.format("Cannot find %s in dumpsys info: %s", layerName, info));
+            }
         }
 
-        layers.clear();
-        layers.addAll(updatedLayerList);
+        if (layers.equals(updatedLayerList)) {
+            return false;
+        } else {
+            layers.clear();
+            layers.addAll(updatedLayerList);
+            return true;
+        }
     }
 
     private ArrayList<String> findChildrenLayers(String parent, String info, String[] layerListFull) {
@@ -362,10 +358,7 @@ public class Device {
         while (matcher.find()) {
             String layerInfo = info.substring(0, matcher.start());
             Matcher layerMatcher;
-            if (sdkVersion == 24 || sdkVersion == 25)
-                layerMatcher = layerNamePatternN.matcher(layerInfo);
-            else
-                layerMatcher = layerNamePattern.matcher(layerInfo);
+            layerMatcher = layerNamePattern.matcher(layerInfo);
             List<String> matches = layerMatcher.results().map((r)-> layerInfo.substring(r.start(), r.end())).collect(Collectors.toList());
             String name = matches.get(matches.size() - 1);
             if (name != null) {

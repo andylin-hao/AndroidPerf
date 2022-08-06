@@ -210,13 +210,7 @@ public class AppController implements Initializable {
 
     private void refreshTask() {
         if (selectedDevice != null) {
-            boolean isChanged = selectedDevice.checkCurrentPackage();
-            if (!isChanged) {
-                String packageName = selectedDevice.getTargetPackage();
-                if (packageName != null && !packageName.isEmpty()) {
-                    selectedDevice.updateLayerList();
-                }
-            }
+            selectedDevice.checkCurrentPackage();
         }
     }
 

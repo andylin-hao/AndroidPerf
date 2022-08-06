@@ -18,4 +18,24 @@ public class Layer {
     public String toString() {
         return String.format("Layer#%d:%s", id, layerName);
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Layer layer = (Layer) o;
+
+        if (hasBuffer != layer.hasBuffer) return false;
+        if (id != layer.id) return false;
+        return layerName.equals(layer.layerName);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = layerName.hashCode();
+        result = 31 * result + (hasBuffer ? 1 : 0);
+        result = 31 * result + id;
+        return result;
+    }
 }

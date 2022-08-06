@@ -4,6 +4,8 @@ import javafx.application.Platform;
 import javafx.scene.chart.XYChart;
 
 import java.util.ArrayList;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class FPSPerfService extends BasePerfService {
     private long lastFrameTimestamp = 0;
@@ -11,6 +13,8 @@ public class FPSPerfService extends BasePerfService {
     private int numFrames = 0;
     Layer targetLayer = null;
     boolean targetShouldChange = true;
+
+    Future<?> updateLayerTask = null;
 
     void clearLatencyData() {
         var layers = new ArrayList<>(device.getLayers());
@@ -132,6 +136,14 @@ public class FPSPerfService extends BasePerfService {
         System.out.println("-------------------");
     }
 
+    private void updateLayers() {
+        String packageName = device.getTargetPackage();
+        if (packageName != null && !packageName.isEmpty()) {
+            if (device.updateLayerList())
+                targetShouldChange = true;
+        }
+    }
+
     @Override
     void update() {
         var frameResults = acquireLatencyData(targetLayer);
@@ -163,8 +175,16 @@ public class FPSPerfService extends BasePerfService {
     }
 
     @Override
+    void end() {
+        if (updateLayerTask != null)
+            updateLayerTask.cancel(true);
+        super.end();
+    }
+
+    @Override
     void begin() {
         clearLatencyData();
         super.begin();
+        updateLayerTask = executorService.scheduleAtFixedRate(this::updateLayers, 500, 500, TimeUnit.MILLISECONDS);
     }
 }
