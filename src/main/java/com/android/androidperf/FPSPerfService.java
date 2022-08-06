@@ -2,12 +2,15 @@ package com.android.androidperf;
 
 import javafx.application.Platform;
 import javafx.scene.chart.XYChart;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class FPSPerfService extends BasePerfService {
+    private static final Logger LOGGER = LogManager.getLogger(FPSPerfService.class);
     private long lastFrameTimestamp = 0;
     private Double totalTime = 0.;
     private int numFrames = 0;
@@ -77,7 +80,7 @@ public class FPSPerfService extends BasePerfService {
         double fps = 0.;
         if (totalTime != 0)
             fps = numFrames / totalTime * 1000;
-        System.out.printf("%f / %d = %f\n", totalTime, numFrames, fps);
+        LOGGER.debug(String.format("%f / %d = %f", totalTime, numFrames, fps));
         if (fps < 1.)
             targetShouldChange = true;
         double finalFps = fps;
@@ -118,11 +121,11 @@ public class FPSPerfService extends BasePerfService {
     void updateTargetLayer() {
         var layers = new ArrayList<>(device.getLayers());
         for (var layer : layers) {
-            System.out.println(layer);
+            LOGGER.debug(layer);
             var frameResults = acquireLatencyData(layer);
             if (isLayerActive(frameResults)) {
                 if (layer.isSurfaceView) {
-                    System.out.println("Target: " + layer);
+                    LOGGER.debug("Target: " + layer);
                     targetLayer = layer;
                     targetShouldChange = false;
                     break;
@@ -133,7 +136,7 @@ public class FPSPerfService extends BasePerfService {
             }
 
         }
-        System.out.println("-------------------");
+        LOGGER.debug("-------------------");
     }
 
     private void updateLayers() {
