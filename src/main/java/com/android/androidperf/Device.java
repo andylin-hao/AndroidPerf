@@ -157,7 +157,7 @@ public class Device {
             memSize = 0;
             LOGGER.warn("Cannot get memory info");
         }
-        props.add(new DeviceProp("Memory", Math.round(memSize) + " GB"));
+        props.add(new DeviceProp("Memory", String.format("%.1f", memSize) + " GB"));
 
         // acquire storage info
         info = execCmd("df | grep /storage/emulated");
