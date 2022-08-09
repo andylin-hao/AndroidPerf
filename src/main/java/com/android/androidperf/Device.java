@@ -42,6 +42,7 @@ public class Device {
     private final ArrayList<BasePerfService> services = new ArrayList<>();
     private final ArrayList<Layer> layers = new ArrayList<>();
     private final ObservableList<String> packageList = FXCollections.observableArrayList();
+    private String lastLayerInfo = "";
     private String targetPackage;
 
     private boolean hasStartedPerf = false;
@@ -190,6 +191,10 @@ public class Device {
         updatePackageList();
     }
 
+    /**
+     * Add a profiling service to the device
+     * @param serviceClass the class of the service
+     */
     void registerService(Class<?> serviceClass) {
         BasePerfService service;
         try {
@@ -203,6 +208,9 @@ public class Device {
         services.add(service);
     }
 
+    /**
+     * Start all profiling services
+     */
     void startPerf() {
         if (hasStartedPerf) {
             endPerf();
@@ -215,6 +223,9 @@ public class Device {
         Platform.runLater(controller::updateUIOnStateChanges);
     }
 
+    /**
+     * End all profiling services
+     */
     void endPerf() {
         if (hasStartedPerf) {
             for (var service : services) {
@@ -225,6 +236,9 @@ public class Device {
         Platform.runLater(controller::updateUIOnStateChanges);
     }
 
+    /**
+     * Completely shutdown all profiling threads, used upon app close
+     */
     void shutdown() {
         endPerf();
         for (var service : services) {
@@ -232,16 +246,24 @@ public class Device {
         }
     }
 
+    /**
+     * Get the profiling state
+     * @return true when profiling is running
+     */
     boolean getPerfState() {
         return hasStartedPerf;
     }
 
+    /**
+     * Update the list of all installed packages
+     */
     public void updatePackageList() {
         ArrayList<String> packages = new ArrayList<>();
         String mainIntent = "      android.intent.action.MAIN:";
         String intent = "      android.intent.action.";
         Pattern namePattern = Pattern.compile(" {8}\\S+ (\\S+)/.+");
 
+        // show all packages with the MAIN intent, which indicates that the app can be opened from the launcher
         String packageInfo = execCmd("dumpsys package r activity");
         String processInfo = execCmd("ps -A");
 
@@ -265,6 +287,9 @@ public class Device {
         Platform.runLater(() -> packageList.setAll(packages));
     }
 
+    /**
+     * Periodically update the currently running package, and moves it to the front of the package list in the UI
+     */
     public void checkCurrentPackage() {
         String info = execCmd("dumpsys window | grep mCurrentFocus");
         String[] activityInfo = info.split(" ");
@@ -279,9 +304,15 @@ public class Device {
         }
     }
 
+    /**
+     * Update the layer info of the currently selected package
+     * @return true if the layers have changed
+     */
     public synchronized boolean updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
         String layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
+        if (layerListInfo.equals(lastLayerInfo))
+            return false;
         String[] layerListFull = layerListInfo.split("\n");
         LinkedBlockingDeque<String> layerList = Arrays.stream(layerListFull)
                 .filter(str -> str.contains(targetPackage)).collect(Collectors.toCollection(LinkedBlockingDeque::new));
@@ -309,7 +340,7 @@ public class Device {
                 Matcher layerMatcher = layerNamePattern.matcher(bufferInfo);
                 if (layerMatcher.find())
                     bufferInfo = bufferInfo.substring(0, layerMatcher.start());
-                Layer layer = null;
+                Layer layer;
                 layerList.addAll(findChildrenLayers(layerName, info, layerListFull).stream().filter(i -> !layerList.contains(i)).collect(Collectors.toList()));
 
                 // * Layer 0x7615a5469f98 (SurfaceView - com.android.chrome/com.google.android.apps.chrome.Main#0)
@@ -329,14 +360,13 @@ public class Device {
                     layer = new Layer(layerName, w != 0 && h != 0, id);
                     idMap.put(layerName, id + 1);
                     info = info.replace(info.substring(start, end + bufferInfo.length()), "");
-                    if (layer.hasBuffer) {
-                        updatedLayerList.add(layer);
-                    }
+                    updatedLayerList.add(layer);
                     break;
                 }
             }
         }
 
+        lastLayerInfo = layerListInfo;
         if (layers.equals(updatedLayerList)) {
             return false;
         } else {
@@ -346,6 +376,15 @@ public class Device {
         }
     }
 
+    /**
+     * Reconstruct the layer dependency from the layer info
+     * and extract all the children layers for a parent layer,
+     * so that we can extract overlay layers
+     * @param parent the parent layer
+     * @param info the layer info
+     * @param layerListFull the full layer list
+     * @return the children layer
+     */
     private ArrayList<String> findChildrenLayers(String parent, String info, String[] layerListFull) {
         Pattern parentPattern = Pattern.compile(String.format("parent=(%s)", Pattern.quote(parent)));
         Matcher matcher = parentPattern.matcher(info);
@@ -372,6 +411,12 @@ public class Device {
         return children;
     }
 
+    /**
+     * Execute ADB command
+     * @param cmd command
+     * @param args command arguments
+     * @return execution results
+     */
     String execCmd(String cmd, String... args) {
         try (InputStream stream = jadbDevice.execute(cmd, args)) {
             return new String(stream.readAllBytes()).strip();
@@ -381,6 +426,10 @@ public class Device {
         }
     }
 
+    /**
+     * Set the package to be profiled
+     * @param packageName the package's name
+     */
     void setTargetPackage(String packageName) {
         endPerf();
         targetPackage = packageName;

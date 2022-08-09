@@ -9,7 +9,6 @@ public class BasePerfService extends Thread {
 
     protected ConcurrentLinkedQueue<Object> dataQueue = new ConcurrentLinkedQueue<>();
     protected Device device = null;
-    protected int sampleIntervalMilli = 500;
     protected long dumpTimer = 0;
     protected Future<?> updateTask = null;
     protected Future<?> dumpTask = null;
@@ -18,7 +17,7 @@ public class BasePerfService extends Thread {
     void dump() {dumpTimer++;}
     void update() {}
     void begin() {
-        updateTask = executorService.scheduleAtFixedRate(this::update, 0, sampleIntervalMilli, TimeUnit.MILLISECONDS);
+        updateTask = executorService.scheduleAtFixedRate(this::update, 0, 500, TimeUnit.MILLISECONDS);
         dumpTask = executorService.scheduleAtFixedRate(this::dump, 1000, 1000, TimeUnit.MILLISECONDS);
     }
     void end() {

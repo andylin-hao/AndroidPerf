@@ -22,6 +22,11 @@ public class JadbDevice {
         Rescue
     }
 
+    public enum ForwardType {
+        TCP,
+        LOCAL
+    }
+
     //noinspection OctalInteger
     private static final int DEFAULT_MODE = 0664;
     private final String serial;
@@ -133,6 +138,15 @@ public class JadbDevice {
         StringBuilder shellLine = buildCmdLine(command, args);
         send(transport, "exec:" + shellLine.toString());
         return new BufferedInputStream(transport.getInputStream());
+    }
+
+    public String forward(ForwardType localType, String localPort, ForwardType remoteType, String remotePort) throws IOException, JadbException {
+        String local = String.format("%s:%s", localType == ForwardType.TCP ? "tcp" : "local", localPort);
+        String remote = String.format("%s:%s", remoteType == ForwardType.TCP ? "tcp" : "local", remotePort);
+        Transport transport = getTransport();
+        send(transport, String.format("host:forward:%s;%s", local, remote));
+        return new String(transport.getInputStream().readAllBytes());
+
     }
 
     /**

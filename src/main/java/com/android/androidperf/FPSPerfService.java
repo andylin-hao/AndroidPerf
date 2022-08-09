@@ -89,11 +89,20 @@ public class FPSPerfService extends BasePerfService {
         numFrames = 0;
     }
 
+    /**
+     * Check if the layer is active, i.e., if it's producing frames
+     * @param frameResults the layer's frame latency data
+     * @return true if it's active
+     */
     boolean isLayerActive(ArrayList<Long> frameResults) {
+        // frame result is empty
         if (frameResults.isEmpty())
             return false;
+        // frame result contains only 0
         if (frameResults.stream().noneMatch(i -> i > 0))
             return false;
+
+        // frame result doesn't have any new data
         int i = 0;
         for (; i < frameResults.size(); i++) {
             if (frameResults.get(i) > lastFrameTimestamp)
@@ -149,8 +158,11 @@ public class FPSPerfService extends BasePerfService {
 
     @Override
     void update() {
+        // get the latency data of the target layer
         var frameResults = acquireLatencyData(targetLayer);
         try {
+            // if there is no target layer, or the target layer is no longer active,
+            // or the target should change as hinted by others, we update the target layer
             if (targetLayer == null || !isLayerActive(frameResults) || targetShouldChange) {
                 updateTargetLayer();
             }
