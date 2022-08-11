@@ -11,40 +11,6 @@ public class CPUPerfService extends BasePerfService {
     static private final Pattern totalCPUPattern = Pattern.compile(".* +([\\d.]+)");
     static private final Pattern totalCPUPatternOld = Pattern.compile("([\\d.]+)%");
 
-    @SuppressWarnings("unchecked")
-    @Override
-    void dump() {
-        super.dump();
-
-        Pair<Double, Double> data;
-        double procUsage = 0.;
-        double totalUsage = 0.;
-
-        int count = 0;
-        while (!dataQueue.isEmpty()) {
-            data = (Pair<Double, Double>) dataQueue.poll();
-            procUsage += data.getKey();
-            totalUsage += data.getValue();
-            count++;
-        }
-        if (count == 0) {
-            procUsage = 0;
-            totalUsage = 0;
-        } else {
-            procUsage = procUsage / count;
-            totalUsage = totalUsage / count;
-        }
-        double finalProcUsage = procUsage;
-        double finalTotalUsage = totalUsage;
-
-        Platform.runLater(() -> device.getController()
-                .addDataToChart(
-                        "CPU",
-                        new XYChart.Data<>(dumpTimer, finalProcUsage / device.getCpuCores()),
-                        new XYChart.Data<>(dumpTimer, finalTotalUsage / device.getCpuCores()))
-        );
-    }
-
     Pair<Double, Double> acquireCPUData() {
         String info = device.execCmd("top -o CMDLINE,%CPU -n 1 -q -b -k%CPU");
         String packageName = device.getTargetPackage();
@@ -86,6 +52,17 @@ public class CPUPerfService extends BasePerfService {
 
     @Override
     void update() {
-        dataQueue.add(acquireCPUData());
+        Pair<Double, Double> data = acquireCPUData();
+        double procUsage = data.getKey();
+        double totalUsage = data.getValue();
+
+        Platform.runLater(() -> device.getController()
+                .addDataToChart(
+                        "CPU",
+                        new XYChart.Data<>(timer, procUsage / device.getCpuCores()),
+                        new XYChart.Data<>(timer, totalUsage / device.getCpuCores()))
+        );
+        dataQueue.add(data);
+        super.update();
     }
 }

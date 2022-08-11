@@ -12,8 +12,6 @@ import java.util.concurrent.TimeUnit;
 public class FPSPerfService extends BasePerfService {
     private static final Logger LOGGER = LogManager.getLogger(FPSPerfService.class);
     private long lastFrameTimestamp = 0;
-    private Double totalTime = 0.;
-    private int numFrames = 0;
     Layer targetLayer = null;
     boolean targetShouldChange = true;
 
@@ -81,32 +79,6 @@ public class FPSPerfService extends BasePerfService {
         return results;
     }
 
-    @Override
-    void dump() {
-//        super.dump();
-//        while (!dataQueue.isEmpty()) {
-//            totalTime += (Double) dataQueue.poll();
-//            numFrames++;
-//
-//            if (totalTime > 1000) {
-//                break;
-//            }
-//        }
-//
-//        double fps = 0.;
-//        if (totalTime != 0)
-//            fps = numFrames / totalTime * 1000;
-//        LOGGER.debug(String.format("%d / %f = %f", numFrames, totalTime / 1000, fps));
-//        if (fps < 1.)
-//            targetShouldChange = true;
-//        double finalFps = fps;
-//        if (fps < 1)
-//            LOGGER.debug("FPS less than 1");
-//        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(dumpTimer, finalFps)));
-//        totalTime = 0.;
-//        numFrames = 0;
-    }
-
     /**
      * Check if the layer is active, i.e., if it's producing frames
      * @param frameResults the layer's frame latency data
@@ -128,15 +100,18 @@ public class FPSPerfService extends BasePerfService {
         }
         double totalTime = 0;
         double frameCount = 0;
+        long preceding = lastFrameTimestamp;
         if (i < frameResults.size()) {
-            for (; i < frameResults.size(); i++) {
-                if (i == 0)
-                    continue;
-                long lastFrameTimestamp = frameResults.get(i - 1);
-                if (lastFrameTimestamp == 0)
-                    continue;
-                totalTime += (Double.valueOf(frameResults.get(i)) - lastFrameTimestamp) / 1e6;
-                frameCount++;
+            if (i != frameResults.size() - 1) {
+                for (; i < frameResults.size(); i++) {
+                    if (preceding == 0) {
+                        preceding = frameResults.get(i);
+                        continue;
+                    }
+                    totalTime += (Double.valueOf(frameResults.get(i)) - preceding) / 1e6;
+                    preceding = frameResults.get(i);
+                    frameCount++;
+                }
             }
         } else return false;
         double fps = 0.;
@@ -182,7 +157,6 @@ public class FPSPerfService extends BasePerfService {
             if (targetLayer == null || !isLayerActive(frameResults) || targetShouldChange) {
                 updateTargetLayer();
                 LOGGER.debug("Target: " + targetLayer);
-                LOGGER.debug("-------------------");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -194,18 +168,19 @@ public class FPSPerfService extends BasePerfService {
                 break;
         }
         ArrayList<Double> results = new ArrayList<>();
-        long old = lastFrameTimestamp;
+        long preceding = lastFrameTimestamp;
         if (i < frameResults.size()) {
             lastFrameTimestamp = frameResults.get(frameResults.size() - 1);
-            for (; i < frameResults.size() - 1; i++) {
-                if (i == 0)
-                    continue;
-                long last = frameResults.get(i - 1);
-                if (last == 0) {
-                    continue;
+            if (i != frameResults.size() - 1) {
+                for (; i < frameResults.size(); i++) {
+                    if (preceding == 0) {
+                        preceding = frameResults.get(i);
+                        continue;
+                    }
+                    Double frameTime = (Double.valueOf(frameResults.get(i)) - preceding) / 1e6;
+                    preceding = frameResults.get(i);
+                    results.add(frameTime);
                 }
-                Double frameTime = (Double.valueOf(frameResults.get(i)) - last) / 1e6;
-                results.add(frameTime);
             }
         }
 
@@ -217,12 +192,10 @@ public class FPSPerfService extends BasePerfService {
             targetShouldChange = true;
         double finalFps = fps;
         LOGGER.debug(String.format("%d / %f = %f", results.size(), totalTime / 1000, fps));
-        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(dumpTimer, finalFps)));
-        dumpTimer++;
-//        dataQueue.addAll(results);
-
-        if (results.size() <= 2)
-            LOGGER.debug("Small");
+        LOGGER.debug("-------------------");
+        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(timer, finalFps)));
+        dataQueue.add(fps);
+        super.update();
     }
 
     @Override

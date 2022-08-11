@@ -53,7 +53,7 @@ public class Device {
     private int localPort = -1;
 
     private static final String SERVER_PATH_BASE = "/data/local/tmp";
-    private static final String SERVER_EXECUTABLE = "androidperf";
+    private static final String SERVER_EXECUTABLE = "AndroidPerfServer";
     private static final String MSG_END = "PERF_MSG_END\n";
     private static final String UNIX_SOCKET = "androidperf";
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
