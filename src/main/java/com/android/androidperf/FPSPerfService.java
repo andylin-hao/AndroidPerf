@@ -39,6 +39,17 @@ public class FPSPerfService extends BasePerfService {
         // Data look like [desiredPresentTime] [actualPresentTime] [frameReadyTime]
         // All timestamps are in nanoseconds. We use actualPresentTime to calculate frame time
         latencyData = latencyData.replace("\r\n", "\n");
+        long padding = 0;
+        int paddingIndex = latencyData.indexOf("PADDING");
+        if (paddingIndex >= 0) {
+            String paddingStr = latencyData.substring(paddingIndex);
+            String[] paddingInfo = paddingStr.split("\\s");
+            if (paddingInfo.length >= 2) {
+                try {
+                    padding = Long.parseLong(paddingInfo[1]);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
         String[] dataLines = latencyData.split("\n\n");
         if (dataLines.length > 1) {
             if (layer.id >= dataLines.length)
@@ -53,10 +64,6 @@ public class FPSPerfService extends BasePerfService {
                 break;
             String frameData = dataLines[i];
             String[] frameTimestamps = frameData.split("\\s");
-            if (frameTimestamps.length != 3) {
-                if (frameTimestamps.length != 2 || !frameTimestamps[0].equals("PADDING"))
-                    continue;
-            }
             try {
                 long actualPresentTime = Long.parseLong(frameTimestamps[1]);
                 if (actualPresentTime == Long.MAX_VALUE)
@@ -65,32 +72,39 @@ public class FPSPerfService extends BasePerfService {
             } catch (Exception ignored) {
             }
         }
+        if (!results.isEmpty()) {
+            long last = results.get(results.size() - 1);
+            if (last != 0)
+                results.add(padding);
+        }
 
         return results;
     }
 
     @Override
     void dump() {
-        super.dump();
-        while (!dataQueue.isEmpty()) {
-            totalTime += (Double) dataQueue.poll();
-            numFrames++;
-
-            if (totalTime > 1000) {
-                break;
-            }
-        }
-
-        double fps = 0.;
-        if (totalTime != 0)
-            fps = numFrames / totalTime * 1000;
-        LOGGER.debug(String.format("%f / %d = %f", totalTime, numFrames, fps));
-        if (fps < 1.)
-            targetShouldChange = true;
-        double finalFps = fps;
-        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(dumpTimer, finalFps)));
-        totalTime = 0.;
-        numFrames = 0;
+//        super.dump();
+//        while (!dataQueue.isEmpty()) {
+//            totalTime += (Double) dataQueue.poll();
+//            numFrames++;
+//
+//            if (totalTime > 1000) {
+//                break;
+//            }
+//        }
+//
+//        double fps = 0.;
+//        if (totalTime != 0)
+//            fps = numFrames / totalTime * 1000;
+//        LOGGER.debug(String.format("%d / %f = %f", numFrames, totalTime / 1000, fps));
+//        if (fps < 1.)
+//            targetShouldChange = true;
+//        double finalFps = fps;
+//        if (fps < 1)
+//            LOGGER.debug("FPS less than 1");
+//        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(dumpTimer, finalFps)));
+//        totalTime = 0.;
+//        numFrames = 0;
     }
 
     /**
@@ -138,7 +152,6 @@ public class FPSPerfService extends BasePerfService {
             var frameResults = acquireLatencyData(layer);
             if (isLayerActive(frameResults)) {
                 if (layer.isSurfaceView) {
-                    LOGGER.debug("Target: " + layer);
                     targetLayer = layer;
                     targetShouldChange = false;
                     break;
@@ -149,7 +162,6 @@ public class FPSPerfService extends BasePerfService {
             }
 
         }
-        LOGGER.debug("-------------------");
     }
 
     private void updateLayers() {
@@ -169,6 +181,8 @@ public class FPSPerfService extends BasePerfService {
             // or the target should change as hinted by others, we update the target layer
             if (targetLayer == null || !isLayerActive(frameResults) || targetShouldChange) {
                 updateTargetLayer();
+                LOGGER.debug("Target: " + targetLayer);
+                LOGGER.debug("-------------------");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -179,18 +193,36 @@ public class FPSPerfService extends BasePerfService {
             if (frameResults.get(i) > lastFrameTimestamp)
                 break;
         }
+        ArrayList<Double> results = new ArrayList<>();
+        long old = lastFrameTimestamp;
         if (i < frameResults.size()) {
             lastFrameTimestamp = frameResults.get(frameResults.size() - 1);
-            for (; i < frameResults.size(); i++) {
+            for (; i < frameResults.size() - 1; i++) {
                 if (i == 0)
                     continue;
-                long lastFrameTimestamp = frameResults.get(i - 1);
-                if (lastFrameTimestamp == 0)
+                long last = frameResults.get(i - 1);
+                if (last == 0) {
                     continue;
-                Double frameTime = (Double.valueOf(frameResults.get(i)) - lastFrameTimestamp) / 1e6;
-                dataQueue.add(frameTime);
+                }
+                Double frameTime = (Double.valueOf(frameResults.get(i)) - last) / 1e6;
+                results.add(frameTime);
             }
         }
+
+        double totalTime = results.stream().mapToDouble(a -> a).sum();
+        double fps = 0;
+        if (totalTime != 0)
+            fps = results.size() / totalTime * 1000;
+        if (fps < 1.)
+            targetShouldChange = true;
+        double finalFps = fps;
+        LOGGER.debug(String.format("%d / %f = %f", results.size(), totalTime / 1000, fps));
+        Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(dumpTimer, finalFps)));
+        dumpTimer++;
+//        dataQueue.addAll(results);
+
+        if (results.size() <= 2)
+            LOGGER.debug("Small");
     }
 
     @Override

@@ -17,7 +17,7 @@ public class BasePerfService extends Thread {
     void dump() {dumpTimer++;}
     void update() {}
     void begin() {
-        updateTask = executorService.scheduleAtFixedRate(this::update, 0, 500, TimeUnit.MILLISECONDS);
+        updateTask = executorService.scheduleAtFixedRate(this::update, 0, 1000, TimeUnit.MILLISECONDS);
         dumpTask = executorService.scheduleAtFixedRate(this::dump, 1000, 1000, TimeUnit.MILLISECONDS);
     }
     void end() {

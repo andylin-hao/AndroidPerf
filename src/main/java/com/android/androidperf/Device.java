@@ -42,7 +42,6 @@ public class Device {
     private final double memSize;
     private final double storageSize;
     private final ArrayList<DeviceProp> props = new ArrayList<>();
-    private boolean is64Bit = false;
 
     private final ArrayList<BasePerfService> services = new ArrayList<>();
     private final ArrayList<Layer> layers = new ArrayList<>();
@@ -480,7 +479,6 @@ public class Device {
                 abi = abiList.contains("x86_64") ? "x86_64" :
                         (abiList.contains("x86")? "x86" :
                                 (abiList.contains("arm64-v8a")? "arm64-v8a" : abi));
-                is64Bit = abi.equals("x86_64") || abi.equals("arm64-v8a");
                 jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
             } catch (IOException | JadbException e) {
                 LOGGER.error("Failed to push server to device", e);
@@ -501,15 +499,15 @@ public class Device {
 
             // PING server to test aliveness
             reply = sendMSG("PING");
-            if (!reply.contains("OKAY"))
+            if (reply == null || !reply.contains("OKAY"))
                 LOGGER.error("Failed to PING server");
         }
     }
 
     private boolean isServerRunning() {
-        String processInfo = execCmd("pidof " + SERVER_EXECUTABLE + (is64Bit ? "64" : "32"));
+        String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
         if (processInfo == null || processInfo.isEmpty()) {
-            processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE + (is64Bit ? "64" : "32"));
+            processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE);
             return !processInfo.isEmpty();
         } else
             return true;
