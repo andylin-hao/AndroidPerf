@@ -29,7 +29,9 @@ public class FPSPerfService extends BasePerfService {
             return new ArrayList<>();
         String latencyData;
 
-        latencyData = device.execCmd(String.format("dumpsys SurfaceFlinger --latency '%s'", layer.layerName));
+        latencyData = device.sendMSG(String.format("latency %s", layer.layerName));
+        if (latencyData == null)
+            latencyData = device.execCmd(String.format("dumpsys SurfaceFlinger --latency '%s'", layer.layerName));
 
         if (latencyData.isEmpty())
             return new ArrayList<>();
@@ -51,8 +53,10 @@ public class FPSPerfService extends BasePerfService {
                 break;
             String frameData = dataLines[i];
             String[] frameTimestamps = frameData.split("\\s");
-            if (frameTimestamps.length != 3)
-                continue;
+            if (frameTimestamps.length != 3) {
+                if (frameTimestamps.length != 2 || !frameTimestamps[0].equals("PADDING"))
+                    continue;
+            }
             try {
                 long actualPresentTime = Long.parseLong(frameTimestamps[1]);
                 if (actualPresentTime == Long.MAX_VALUE)

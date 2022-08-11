@@ -7,11 +7,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbConnection;
 import se.vidstige.jadb.JadbDevice;
+import se.vidstige.jadb.JadbDevice.ForwardType;
 import se.vidstige.jadb.JadbException;
+import se.vidstige.jadb.RemoteFile;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.reflect.InvocationTargetException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.regex.Matcher;
@@ -38,6 +42,7 @@ public class Device {
     private final double memSize;
     private final double storageSize;
     private final ArrayList<DeviceProp> props = new ArrayList<>();
+    private boolean is64Bit = false;
 
     private final ArrayList<BasePerfService> services = new ArrayList<>();
     private final ArrayList<Layer> layers = new ArrayList<>();
@@ -46,7 +51,12 @@ public class Device {
     private String targetPackage;
 
     private boolean hasStartedPerf = false;
+    private int localPort = -1;
 
+    private static final String SERVER_PATH_BASE = "/data/local/tmp";
+    private static final String SERVER_EXECUTABLE = "androidperf";
+    private static final String MSG_END = "PERF_MSG_END\n";
+    private static final String UNIX_SOCKET = "androidperf";
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
@@ -189,6 +199,7 @@ public class Device {
         props.add(new DeviceProp("GL Version", glVersion));
 
         updatePackageList();
+        startServer();
     }
 
     /**
@@ -310,9 +321,12 @@ public class Device {
      */
     public synchronized boolean updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
-        String layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
+        String layerListInfo = sendMSG("list");
+        if (layerListInfo == null)
+            layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
         if (layerListInfo.equals(lastLayerInfo))
             return false;
+
         String[] layerListFull = layerListInfo.split("\n");
         LinkedBlockingDeque<String> layerList = Arrays.stream(layerListFull)
                 .filter(str -> str.contains(targetPackage)).collect(Collectors.toCollection(LinkedBlockingDeque::new));
@@ -417,7 +431,7 @@ public class Device {
      * @param args command arguments
      * @return execution results
      */
-    String execCmd(String cmd, String... args) {
+    public String execCmd(String cmd, String... args) {
         try (InputStream stream = jadbDevice.execute(cmd, args)) {
             return new String(stream.readAllBytes()).strip();
         } catch (IOException | JadbException e) {
@@ -426,11 +440,145 @@ public class Device {
         }
     }
 
+    /** Setup port forwarding to unix domain socket
+     * @return true if success
+     */
+    private boolean setupForward() {
+        // forward port to unix abstract socket
+        localPort = findFreePort();
+        if (localPort < 0) {
+            LOGGER.error("Failed to find available ports");
+            return false;
+        }
+        try {
+            jadbDevice.clearForward();
+            jadbDevice.forward(ForwardType.TCP, String.valueOf(localPort), ForwardType.LOCAL, UNIX_SOCKET);
+        } catch (IOException | JadbException e) {
+            LOGGER.error("Failed to forward local port", e);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Push the server executable to device, grant permissions and start the server
+     */
+    private void startServer() {
+        if (!isServerRunning()) {
+            if (localPort < 0 && !setupForward())
+                return;
+
+            // create tmp directory in device
+            if (execCmd("mkdir " + SERVER_PATH_BASE).contains("Error")) {
+                LOGGER.error("Failed to create directory");
+                return;
+            }
+
+            // push proper executable to tmp
+            try {
+                String abi = "armeabi-v7a";
+                abi = abiList.contains("x86_64") ? "x86_64" :
+                        (abiList.contains("x86")? "x86" :
+                                (abiList.contains("arm64-v8a")? "arm64-v8a" : abi));
+                is64Bit = abi.equals("x86_64") || abi.equals("arm64-v8a");
+                jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
+            } catch (IOException | JadbException e) {
+                LOGGER.error("Failed to push server to device", e);
+                return;
+            }
+
+            // grant permissions
+            String reply = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
+            if (reply.contains("Error")) {
+                LOGGER.error("Failed to chmod");
+                return;
+            }
+
+            // start the server
+            reply = execCmd(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
+            if (reply.contains("Error"))
+                return;
+
+            // PING server to test aliveness
+            reply = sendMSG("PING");
+            if (!reply.contains("OKAY"))
+                LOGGER.error("Failed to PING server");
+        }
+    }
+
+    private boolean isServerRunning() {
+        String processInfo = execCmd("pidof " + SERVER_EXECUTABLE + (is64Bit ? "64" : "32"));
+        if (processInfo == null || processInfo.isEmpty()) {
+            processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE + (is64Bit ? "64" : "32"));
+            return !processInfo.isEmpty();
+        } else
+            return true;
+    }
+
+    /**
+     * Find an available port on the PC
+     * @return port number
+     */
+    private int findFreePort() {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            socket.setReuseAddress(true);
+            int port = socket.getLocalPort();
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+            }
+            return port;
+        } catch (IOException ignored) {
+        }
+        return -1;
+    }
+
+    /**
+     * Send data to the server and acquire reply
+     * @param data data to be sent
+     * @return reply message
+     */
+    public String sendMSG(String data) {
+        try {
+            if (localPort < 0 && !setupForward())
+                return null;
+            Socket localSocket = new Socket(InetAddress.getLoopbackAddress(), localPort);
+            DataOutputStream outputStream = new DataOutputStream(localSocket.getOutputStream());
+            outputStream.write(data.getBytes());
+            outputStream.flush();
+
+            DataInputStream inputStream = new DataInputStream(localSocket.getInputStream());
+            byte[] buffer = new byte[1024];
+            int len;
+            StringBuilder reply = new StringBuilder();
+            int msgStart;
+            int msgEnd;
+            while (true) {
+                len = inputStream.read(buffer);
+                if (len > 0) {
+                    reply.append(new String(buffer, 0, len));
+                }
+                msgEnd = reply.indexOf(MSG_END);
+                if (msgEnd != -1) {
+                    localSocket.close();
+                    return reply.substring(0, msgEnd);
+                }
+                if (len == -1) {
+                    localSocket.close();
+                    return null;
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to send data to server", e);
+            return null;
+        }
+    }
+
     /**
      * Set the package to be profiled
      * @param packageName the package's name
      */
-    void setTargetPackage(String packageName) {
+    public void setTargetPackage(String packageName) {
         endPerf();
         targetPackage = packageName;
         updateLayerList();

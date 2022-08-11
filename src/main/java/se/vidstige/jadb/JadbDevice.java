@@ -141,12 +141,17 @@ public class JadbDevice {
     }
 
     public String forward(ForwardType localType, String localPort, ForwardType remoteType, String remotePort) throws IOException, JadbException {
-        String local = String.format("%s:%s", localType == ForwardType.TCP ? "tcp" : "local", localPort);
-        String remote = String.format("%s:%s", remoteType == ForwardType.TCP ? "tcp" : "local", remotePort);
+        String local = String.format("%s:%s", localType == ForwardType.TCP ? "tcp" : "localabstract", localPort);
+        String remote = String.format("%s:%s", remoteType == ForwardType.TCP ? "tcp" : "localabstract", remotePort);
         Transport transport = getTransport();
         send(transport, String.format("host:forward:%s;%s", local, remote));
         return new String(transport.getInputStream().readAllBytes());
+    }
 
+    public String clearForward() throws IOException, JadbException {
+        Transport transport = getTransport();
+        send(transport, "host:killforward-all");
+        return new String(transport.getInputStream().readAllBytes());
     }
 
     /**
