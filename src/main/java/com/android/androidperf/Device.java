@@ -513,6 +513,14 @@ public class Device {
         return true;
     }
 
+    private void restartServer() {
+        String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
+        if (processInfo != null && !processInfo.isEmpty()) {
+            execCmd("kill -9 " + processInfo);
+        }
+        startServer();
+    }
+
     private boolean isServerRunning() {
         String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
         if (processInfo == null || processInfo.isEmpty()) {
@@ -558,7 +566,6 @@ public class Device {
             byte[] buffer = new byte[1024];
             int len;
             StringBuilder reply = new StringBuilder();
-            int msgStart;
             int msgEnd;
             while (true) {
                 len = inputStream.read(buffer);
@@ -568,15 +575,20 @@ public class Device {
                 msgEnd = reply.indexOf(MSG_END);
                 if (msgEnd != -1) {
                     localSocket.close();
-                    return reply.substring(0, msgEnd);
+                    String replyStr = reply.substring(0, msgEnd);
+                    if (replyStr == null || replyStr.isEmpty())
+                        restartServer();
+                    return replyStr;
                 }
                 if (len == -1) {
+                    restartServer();
                     localSocket.close();
                     return null;
                 }
             }
         } catch (IOException e) {
-            LOGGER.error("Failed to send data to server", e);
+            LOGGER.error("Failed to send data to server, restarting...", e);
+            restartServer();
             return null;
         }
     }
