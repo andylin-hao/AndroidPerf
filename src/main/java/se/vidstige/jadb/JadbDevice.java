@@ -148,9 +148,29 @@ public class JadbDevice {
         return new String(transport.getInputStream().readAllBytes());
     }
 
-    public String clearForward() throws IOException, JadbException {
+    public void clearForward() throws IOException, JadbException {
         Transport transport = getTransport();
-        send(transport, "host:killforward-all");
+        send(transport, "host:list-forward");
+        String result = new String(transport.getInputStream().readAllBytes());
+        result = result.substring(4);
+        if (!result.isEmpty()) {
+            String[] forwardInfo = result.split("\n");
+            for (int i = 0; i < forwardInfo.length - 1; i++) {
+                String forward = forwardInfo[i];
+                String[] info = forward.split("\\s+");
+                if (info.length == 3 && info[0].equals(serial)) {
+                    transport = getTransport();
+                    send(transport, "host:killforward:"+info[1]);
+                    transport.getInputStream().readAllBytes();
+                }
+            }
+        }
+    }
+
+    public String killForward(ForwardType localType, String localPort) throws IOException, JadbException {
+        String local = String.format("%s:%s", localType == ForwardType.TCP ? "tcp" : "localabstract", localPort);
+        Transport transport = getTransport();
+        send(transport, "host:killforward:"+local);
         return new String(transport.getInputStream().readAllBytes());
     }
 

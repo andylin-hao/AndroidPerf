@@ -1,5 +1,6 @@
 package com.android.androidperf;
 
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
@@ -202,11 +203,12 @@ public class AppController implements Initializable {
             selectedDevice.endPerf();
         String deviceID = deviceListBox.getSelectionModel().getSelectedItem();
         selectedDevice = deviceMap.get(deviceID);
-        if (selectedDevice == null) {
-            if (deviceMap.size() > 0) {
-                selectedDevice = (Device) deviceMap.values().toArray()[0];
-            }
-            else return;
+        if (selectedDevice == null)
+            return;
+        if (!selectedDevice.startServer()) {
+            MainApplication.alert("Cannot connect device, please retry!", Alert.AlertType.ERROR);
+            Platform.runLater(()->deviceListBox.getSelectionModel().clearSelection());
+            return;
         }
 
         propTable.getItems().clear();

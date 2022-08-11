@@ -198,7 +198,6 @@ public class Device {
         props.add(new DeviceProp("GL Version", glVersion));
 
         updatePackageList();
-        startServer();
     }
 
     /**
@@ -462,15 +461,15 @@ public class Device {
     /**
      * Push the server executable to device, grant permissions and start the server
      */
-    private void startServer() {
+    public boolean startServer() {
+        if (!setupForward())
+            return false;
         if (!isServerRunning()) {
-            if (localPort < 0 && !setupForward())
-                return;
 
             // create tmp directory in device
             if (execCmd("mkdir " + SERVER_PATH_BASE).contains("Error")) {
                 LOGGER.error("Failed to create directory");
-                return;
+                return false;
             }
 
             // push proper executable to tmp
@@ -482,26 +481,36 @@ public class Device {
                 jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
             } catch (IOException | JadbException e) {
                 LOGGER.error("Failed to push server to device", e);
-                return;
+                return false;
             }
 
             // grant permissions
             String reply = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
             if (reply.contains("Error")) {
                 LOGGER.error("Failed to chmod");
-                return;
+                return false;
             }
 
-            // start the server
-            reply = execCmd(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-            if (reply.contains("Error"))
-                return;
+            long start = System.currentTimeMillis();
+            while (!isServerRunning()) {
+                // start the server
+                reply = execCmd(String.format("%s/%s&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_EXECUTABLE));
+                if (!reply.contains("SUCCESS"))
+                    return false;
+                long timeout = System.currentTimeMillis() - start;
+                if (timeout > 10000) {
+                    return false;
+                }
+            }
 
             // PING server to test aliveness
             reply = sendMSG("PING");
-            if (reply == null || !reply.contains("OKAY"))
+            if (reply == null || !reply.contains("OKAY")) {
                 LOGGER.error("Failed to PING server");
+                return false;
+            }
         }
+        return true;
     }
 
     private boolean isServerRunning() {
