@@ -1,3 +1,7 @@
+# AndroidPerf
+
+该部分实现了AndroidPerf的client端，其通过ADB端口映射以及socket与Android内的server连接，从而实现低开销的数据获取（在百元机上开销不到1%）。
+
 ## 源码结构
 
 项目目前采用了JavaFX作为基本的UI框架，数据与界面分离，其主体包含两个Java包。
