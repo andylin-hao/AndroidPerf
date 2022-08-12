@@ -62,7 +62,7 @@ public class CPUPerfService extends BasePerfService {
                         new XYChart.Data<>(timer, procUsage / device.getCpuCores()),
                         new XYChart.Data<>(timer, totalUsage / device.getCpuCores()))
         );
-        dataQueue.add(data);
+
         super.update();
     }
 }

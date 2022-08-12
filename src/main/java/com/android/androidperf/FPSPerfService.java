@@ -115,6 +115,8 @@ public class FPSPerfService extends BasePerfService {
             }
         } else return false;
         double fps = 0.;
+        if (frameCount < 5)
+            return false;
         if (totalTime != 0)
             fps = frameCount / totalTime * 1000;
         return fps >= 1;
@@ -155,6 +157,7 @@ public class FPSPerfService extends BasePerfService {
             // if there is no target layer, or the target layer is no longer active,
             // or the target should change as hinted by others, we update the target layer
             if (targetLayer == null || !isLayerActive(frameResults) || targetShouldChange) {
+                LOGGER.debug("Target-Old: " + targetLayer);
                 updateTargetLayer();
                 LOGGER.debug("Target: " + targetLayer);
             }
@@ -194,7 +197,6 @@ public class FPSPerfService extends BasePerfService {
         LOGGER.debug(String.format("%d / %f = %f", results.size(), totalTime / 1000, fps));
         LOGGER.debug("-------------------");
         Platform.runLater(() -> device.getController().addDataToChart("FPS", new XYChart.Data<>(timer, finalFps)));
-        dataQueue.add(fps);
         super.update();
     }
 

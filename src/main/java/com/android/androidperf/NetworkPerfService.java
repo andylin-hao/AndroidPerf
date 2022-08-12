@@ -45,7 +45,6 @@ public class NetworkPerfService extends BasePerfService {
                         new XYChart.Data<>(timer, finalTxBytes))
         );
 
-        dataQueue.add(data);
         super.update();
     }
 }
