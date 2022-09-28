@@ -2,16 +2,31 @@ package com.android.androidperf;
 
 public class Layer {
     String layerName;
-    boolean hasBuffer;
+    String packageName;
+    boolean isVisible;
     boolean isSurfaceView = false;
     int id;
-    Layer(String name, boolean buffer, int id) {
+    int w, h, x, y, z;
+
+    Layer(String name, String packageName, boolean buffer, int id, int w, int h, int x, int y, int z) {
         layerName = name;
-        hasBuffer = buffer;
+        isVisible = buffer;
+        this.packageName = packageName;
         this.id = id;
         if (layerName.startsWith("SurfaceView")) {
             isSurfaceView = true;
         }
+        this.w = w;
+        this.h = h;
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    public boolean isCoveredBy(Layer layer) {
+        return z <= layer.z && packageName.contains("incallui") &&
+                x >= layer.x && y >= layer.y &&
+                x + w <= layer.x + layer.w && y + h <= layer.y + layer.h;
     }
 
     @Override
@@ -26,7 +41,7 @@ public class Layer {
 
         Layer layer = (Layer) o;
 
-        if (hasBuffer != layer.hasBuffer) return false;
+        if (isVisible != layer.isVisible) return false;
         if (id != layer.id) return false;
         return layerName.equals(layer.layerName);
     }
@@ -34,7 +49,7 @@ public class Layer {
     @Override
     public int hashCode() {
         int result = layerName.hashCode();
-        result = 31 * result + (hasBuffer ? 1 : 0);
+        result = 31 * result + (isVisible ? 1 : 0);
         result = 31 * result + id;
         return result;
     }
