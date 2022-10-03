@@ -48,6 +48,7 @@ public class Device {
     private final ObservableList<String> packageList = FXCollections.observableArrayList();
     private String lastLayerInfo = "";
     private String targetPackage;
+    private int packageUid;
 
     private boolean hasStartedPerf = false;
     private int localPort = -1;
@@ -600,12 +601,23 @@ public class Device {
     public void setTargetPackage(String packageName) {
         endPerf();
         targetPackage = packageName;
+        String uidInfo = execCmd(String.format("dumpsys package %s| grep userId", packageName));
+        uidInfo = uidInfo.split("\\n")[0].strip();
+        if (uidInfo.contains("userId=")) {
+            try {
+                packageUid = Integer.parseInt(uidInfo.split("=")[1]);
+            } catch (NumberFormatException e) {
+                LOGGER.error(e);
+            }
+        }
         updateLayerList();
     }
 
     public String getTargetPackage() {
         return targetPackage;
     }
+
+    public int getPackageUid() { return  packageUid; }
 
     public ArrayList<Layer> getLayers() {
         return layers;
