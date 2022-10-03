@@ -126,6 +126,8 @@ public class FPSPerfService extends BasePerfService {
         var layers = new ArrayList<>(device.getLayers());
         for (var layer : layers) {
             LOGGER.debug(layer);
+            if (!layer.isVisible)
+                continue;
             var frameResults = acquireLatencyData(layer);
             if (isLayerActive(frameResults)) {
                 if (layer.isSurfaceView) {
