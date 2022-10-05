@@ -62,8 +62,14 @@ public class Device {
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
     private static final Pattern layerNamePattern = Pattern.compile("[*+] .*Layer.*\\(.*\\).*");
-    private static final Pattern bufferStatsPattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
+    private static final Pattern bufferSizePattern = Pattern.compile("activeBuffer=\\[([ \\d]+)x([ \\d]+):.*");
+    private static final Pattern bufferPosPattern = Pattern.compile("pos=\\(\\s*(-?\\d+),\\s*(-?\\d+)\\),");
+    private static final Pattern bufferZOrderPattern = Pattern.compile("z=\\s*(-?\\d+),");
+    private static final Pattern bufferParentPattern = Pattern.compile("parent=(\\S+)");
+    private static final Pattern bufferZRelativeOrderPattern = Pattern.compile("zOrderRelativeOf=(\\S+)");
+
     private static final Pattern bufferStatsPatternR = Pattern.compile(".*slot=(\\S*)");
+
     Device(JadbDevice device, AppController appController) {
         jadbDevice = device;
         controller = appController;
@@ -204,6 +210,7 @@ public class Device {
 
     /**
      * Add a profiling service to the device
+     *
      * @param serviceClass the class of the service
      */
     void registerService(Class<?> serviceClass) {
@@ -259,6 +266,7 @@ public class Device {
 
     /**
      * Get the profiling state
+     *
      * @return true when profiling is running
      */
     boolean getPerfState() {
@@ -317,6 +325,7 @@ public class Device {
 
     /**
      * Update the layer info of the currently selected package
+     *
      * @return true if the layers have changed
      */
     public synchronized boolean updateLayerList() {
@@ -336,7 +345,7 @@ public class Device {
             return isChanged;
         }
 
-        String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer|parent'");
+        String info = execCmd("dumpsys SurfaceFlinger | grep -E '(\\+|\\*).*Layer.*|buffer:.*slot|activeBuffer|parent|z=|pos=|parent=|zOrderRelativeOf='");
 
         Pattern pattern;
         Matcher matcher;
@@ -366,17 +375,49 @@ public class Device {
 
                 // + Layer 0x7f162ba23000 (StatusBar#0)
                 //      format= 1, activeBuffer=[1440x  84:1440,  1], queued-frames=0, mRefreshPending=0
-                bufferMatcher = bufferStatsPattern.matcher(bufferInfo);
+                bufferMatcher = bufferSizePattern.matcher(bufferInfo);
                 if (bufferMatcher.find()) {
                     int w = Integer.parseInt(bufferMatcher.group(1).strip());
                     int h = Integer.parseInt(bufferMatcher.group(2).strip());
+                    Matcher zMatcher = bufferZOrderPattern.matcher(bufferInfo);
+                    Matcher posMatcher = bufferPosPattern.matcher(bufferInfo);
+                    int x = -1;
+                    int y = -1;
+                    int z = -1;
+                    try {
+                        if (posMatcher.find()) {
+                            x = Integer.parseInt(posMatcher.group(1).strip());
+                            y = Integer.parseInt(posMatcher.group(1).strip());
+                        }
+                        if (zMatcher.find())
+                            z = Integer.parseInt(zMatcher.group(1).strip());
+                    } catch (NumberFormatException e) {
+                        LOGGER.error(bufferInfo + e);
+                    }
+
                     int id = idMap.getOrDefault(layerName, 0);
-                    layer = new Layer(layerName, w != 0 && h != 0, id);
+                    layer = new Layer(layerName, targetPackage, true, id, w, h, x, y, z);
                     idMap.put(layerName, id + 1);
+
                     info = info.replace(info.substring(start, end + bufferInfo.length()), "");
                     updatedLayerList.add(layer);
                     break;
                 }
+            }
+        }
+
+        // check whether a layer is overlapped by other layers and thus invisible to users
+        updatedLayerList.sort(Comparator.comparingInt(o -> o.z));
+        for (int i = 0; i < updatedLayerList.size() - 1; i++) {
+            Layer layerToCheck = updatedLayerList.get(i);
+            if (!layerToCheck.isVisible)
+                continue;
+            for (int j = i + 1; j < updatedLayerList.size(); j++) {
+                Layer layer = updatedLayerList.get(j);
+                if (!layer.isVisible)
+                    continue;
+                if (layerToCheck.isCoveredBy(layer))
+                    layerToCheck.isVisible = false;
             }
         }
 
@@ -394,8 +435,9 @@ public class Device {
      * Reconstruct the layer dependency from the layer info
      * and extract all the children layers for a parent layer,
      * so that we can extract overlay layers
-     * @param parent the parent layer
-     * @param info the layer info
+     *
+     * @param parent        the parent layer
+     * @param info          the layer info
      * @param layerListFull the full layer list
      * @return the children layer
      */
@@ -407,12 +449,12 @@ public class Device {
             String layerInfo = info.substring(0, matcher.start());
             Matcher layerMatcher;
             layerMatcher = layerNamePattern.matcher(layerInfo);
-            List<String> matches = layerMatcher.results().map((r)-> layerInfo.substring(r.start(), r.end())).collect(Collectors.toList());
+            List<String> matches = layerMatcher.results().map((r) -> layerInfo.substring(r.start(), r.end())).collect(Collectors.toList());
             String name = matches.get(matches.size() - 1);
             if (name != null) {
                 Pattern pattern;
                 Matcher nameMatcher;
-                for (var layerName: layerListFull) {
+                for (var layerName : layerListFull) {
                     pattern = Pattern.compile(String.format("[*+] .*Layer.*\\((%s.*)\\).*", Pattern.quote(layerName)));
                     nameMatcher = pattern.matcher(name);
                     if (nameMatcher.find()) {
@@ -427,7 +469,8 @@ public class Device {
 
     /**
      * Execute ADB command
-     * @param cmd command
+     *
+     * @param cmd  command
      * @param args command arguments
      * @return execution results
      */
@@ -440,7 +483,9 @@ public class Device {
         }
     }
 
-    /** Setup port forwarding to unix domain socket
+    /**
+     * Setup port forwarding to unix domain socket
+     *
      * @return true if success
      */
     private boolean setupForward() {
@@ -478,8 +523,8 @@ public class Device {
             try {
                 String abi = "armeabi-v7a";
                 abi = abiList.contains("x86_64") ? "x86_64" :
-                        (abiList.contains("x86")? "x86" :
-                                (abiList.contains("arm64-v8a")? "arm64-v8a" : abi));
+                        (abiList.contains("x86") ? "x86" :
+                                (abiList.contains("arm64-v8a") ? "arm64-v8a" : abi));
                 jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
                 jadbDevice.push(new File(String.format("android/%s", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
                 jadbDevice.push(new File(String.format("android/%s.jar", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s.jar", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
@@ -560,6 +605,7 @@ public class Device {
 
     /**
      * Find an available port on the PC
+     *
      * @return port number
      */
     private int findFreePort() {
@@ -578,6 +624,7 @@ public class Device {
 
     /**
      * Send data to the server and acquire reply
+     *
      * @param data data to be sent
      * @return reply message
      */
@@ -624,6 +671,7 @@ public class Device {
 
     /**
      * Set the package to be profiled
+     *
      * @param packageName the package's name
      */
     public void setTargetPackage(String packageName) {

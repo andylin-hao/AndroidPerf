@@ -144,13 +144,18 @@ public class JadbDevice {
         String local = String.format("%s:%s", localType == ForwardType.TCP ? "tcp" : "localabstract", localPort);
         String remote = String.format("%s:%s", remoteType == ForwardType.TCP ? "tcp" : "localabstract", remotePort);
         Transport transport = getTransport();
-        send(transport, String.format("host:forward:%s;%s", local, remote));
+        if (serial == null)
+            throw new JadbException("No serial number");
+        send(transport, String.format("host-serial:%s:forward:%s;%s", serial, local, remote));
         return new String(transport.getInputStream().readAllBytes());
     }
 
     public void clearForward() throws IOException, JadbException {
         Transport transport = getTransport();
-        send(transport, "host:list-forward");
+        if (serial == null)
+            throw new JadbException("No serial number");
+        String hostPrefix = "host-serial:" + serial;
+        send(transport, hostPrefix + ":list-forward");
         String result = new String(transport.getInputStream().readAllBytes());
         result = result.substring(4);
         if (!result.isEmpty()) {
@@ -160,7 +165,7 @@ public class JadbDevice {
                 String[] info = forward.split("\\s+");
                 if (info.length == 3 && info[0].equals(serial)) {
                     transport = getTransport();
-                    send(transport, "host:killforward:"+info[1]);
+                    send(transport, hostPrefix + ":killforward:"+info[1]);
                     transport.getInputStream().readAllBytes();
                 }
             }
