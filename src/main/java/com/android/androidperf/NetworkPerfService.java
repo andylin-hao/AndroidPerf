@@ -9,6 +9,7 @@ public class NetworkPerfService extends BasePerfService {
     private double lastTxBytes = 0;
 
     Pair<Double, Double> acquireNetworkData() {
+        String reply = device.sendMSG(String.format("network %d", device.getTargetPackageUid()));
         String info = device.execCmd("cat /proc/net/dev | grep -E 'wlan|radio'");
         String[] networkInfo = info.split("\n");
         double rxBytes = 0;
