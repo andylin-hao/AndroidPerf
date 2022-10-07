@@ -3,6 +3,7 @@ package com.android.androidperf;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import se.vidstige.jadb.JadbConnection;
@@ -330,8 +331,8 @@ public class Device {
      */
     public synchronized boolean updateLayerList() {
         ArrayList<Layer> updatedLayerList = new ArrayList<>();
-        String layerListInfo = sendMSG("list");
-        if (layerListInfo == null)
+        String layerListInfo = new String(sendMSG("list"));
+        if (layerListInfo.isEmpty())
             layerListInfo = execCmd("dumpsys SurfaceFlinger --list");
         if (layerListInfo.equals(lastLayerInfo))
             return false;
@@ -527,7 +528,7 @@ public class Device {
                                 (abiList.contains("arm64-v8a") ? "arm64-v8a" : abi));
                 jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
                 jadbDevice.push(new File(String.format("android/%s", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
-                jadbDevice.push(new File(String.format("android/%s.jar", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s.jar", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
+                jadbDevice.push(new File(String.format("android/%s.dex", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s.dex", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
             } catch (IOException | JadbException e) {
                 LOGGER.error("Failed to push server to device", e);
                 return false;
@@ -556,15 +557,15 @@ public class Device {
             }
 
             // PING server to test aliveness
-            reply = sendMSG("PING");
+            reply = new String(sendMSG("PING"));
             if (reply == null || !reply.contains("OKAY")) {
                 LOGGER.error("Failed to PING server");
                 return false;
             }
-            replyFW = sendMSG("PING_FW");
+            replyFW = new String(sendMSG("PING_FW"));
             start = System.currentTimeMillis();
             while (replyFW == null || !replyFW.contains("OKAY")) {
-                replyFW = sendMSG("PING_FW");
+                replyFW = new String(sendMSG("PING_FW"));
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 10000) {
                     return false;
@@ -628,7 +629,7 @@ public class Device {
      * @param data data to be sent
      * @return reply message
      */
-    public String sendMSG(String data) {
+    public byte[] sendMSG(String data) {
         try {
             if (localPort < 0 && !setupForward())
                 return null;
@@ -640,21 +641,20 @@ public class Device {
 
             DataInputStream inputStream = new DataInputStream(localSocket.getInputStream());
             byte[] buffer = new byte[1024];
+            ArrayList<Byte> msgEndBytes = new ArrayList<>(Arrays.asList(ArrayUtils.toObject(MSG_END.getBytes())));
+            ArrayList<Byte> replyBuffer = new ArrayList<>();
             int len;
-            StringBuilder reply = new StringBuilder();
             int msgEnd;
             while (true) {
                 len = inputStream.read(buffer);
                 if (len > 0) {
-                    reply.append(new String(buffer, 0, len));
+                    replyBuffer.addAll(Arrays.asList(ArrayUtils.toObject(buffer)).subList(0, len));
                 }
-                msgEnd = reply.indexOf(MSG_END);
+                msgEnd = Collections.indexOfSubList(replyBuffer, msgEndBytes);
                 if (msgEnd != -1) {
                     localSocket.close();
-                    String replyStr = reply.substring(0, msgEnd);
-                    if (replyStr == null || replyStr.isEmpty())
-                        restartServer();
-                    return replyStr;
+                    Byte[] reply = replyBuffer.subList(0, msgEnd).toArray(new Byte[msgEnd]);
+                    return ArrayUtils.toPrimitive(reply);
                 }
                 if (len == -1) {
                     restartServer();

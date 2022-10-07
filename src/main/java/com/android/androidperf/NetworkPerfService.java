@@ -3,25 +3,46 @@ package com.android.androidperf;
 import javafx.application.Platform;
 import javafx.scene.chart.XYChart;
 import javafx.util.Pair;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.nio.ByteBuffer;
 
 public class NetworkPerfService extends BasePerfService {
+    private static final Logger LOGGER = LogManager.getLogger(NetworkPerfService.class);
     private double lastRxBytes = 0;
     private double lastTxBytes = 0;
 
-    Pair<Double, Double> acquireNetworkData() {
-        String reply = device.sendMSG(String.format("network %d", device.getTargetPackageUid()));
-        String info = device.execCmd("cat /proc/net/dev | grep -E 'wlan|radio'");
-        String[] networkInfo = info.split("\n");
-        double rxBytes = 0;
-        double txBytes = 0;
-        for (var interfaceInfo: networkInfo) {
-            String[] data = interfaceInfo.strip().split("\\s+");
-            if (data.length < 10)
-                break;
-            rxBytes += Long.parseLong(data[1]) / 1024.;
-            txBytes += Long.parseLong(data[9]) / 1024.;
+    static class NetStatsData {
+        public long mRxBytes = 0;
+        public long mRxPackets = 0;
+        public long mTxBytes = 0;
+        public long mTxPackets = 0;
+    }
+
+    private NetStatsData fromBytes(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(8);
+        long[] data = new long[4];
+        try {
+            for (int i = 0; i < 4; i++) {
+                buffer.put(bytes, i * 8, 8);
+                data[i] = buffer.getLong();
+            }
+        } catch (Exception ignored) {
+
         }
-        return new Pair<>(rxBytes, txBytes);
+        NetStatsData netStatsData = new NetStatsData();
+        netStatsData.mRxBytes = data[0];
+        netStatsData.mRxPackets = data[1];
+        netStatsData.mTxBytes = data[2];
+        netStatsData.mTxPackets = data[3];
+        return netStatsData;
+    }
+
+    Pair<Double, Double> acquireNetworkData() {
+        byte[] byteData = device.sendMSG(String.format("network %d", device.getTargetPackageUid()));
+        NetStatsData netStatsData = fromBytes(byteData);
+        return new Pair<>((double)netStatsData.mRxBytes, (double)netStatsData.mTxBytes);
     }
 
     @Override
