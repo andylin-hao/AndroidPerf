@@ -48,15 +48,16 @@ public class Device {
     private final ObservableList<String> packageList = FXCollections.observableArrayList();
     private String lastLayerInfo = "";
     private String targetPackage;
-    private int packageUid;
+    private int targetPackageUid;
 
     private boolean hasStartedPerf = false;
     private int localPort = -1;
 
     private static final String SERVER_PATH_BASE = "/data/local/tmp";
     private static final String SERVER_EXECUTABLE = "AndroidPerfServer";
+    private static final String SERVER_FW_EXECUTABLE = "AndroidPerfServerFW";
     private static final String MSG_END = "PERF_MSG_END\n";
-    private static final String UNIX_SOCKET = "androidperf";
+    private static final String UNIX_SOCKET = "AndroidPerf";
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
     private static final Pattern cpuCorePattern = Pattern.compile("cpu\\d+");
     private static final Pattern cpuFreqPattern = Pattern.compile("cpu MHz\\s*:\\s*(.*)");
@@ -525,6 +526,8 @@ public class Device {
                         (abiList.contains("x86") ? "x86" :
                                 (abiList.contains("arm64-v8a") ? "arm64-v8a" : abi));
                 jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
+                jadbDevice.push(new File(String.format("android/%s", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
+                jadbDevice.push(new File(String.format("android/%s.jar", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s.jar", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
             } catch (IOException | JadbException e) {
                 LOGGER.error("Failed to push server to device", e);
                 return false;
@@ -532,16 +535,19 @@ public class Device {
 
             // grant permissions
             String reply = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-            if (reply.contains("Error")) {
+            String replyFW = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
+            if (reply.contains("Error") || replyFW.contains("Error")) {
                 LOGGER.error("Failed to chmod");
                 return false;
             }
 
             long start = System.currentTimeMillis();
             while (!isServerRunning()) {
+                killServer();
                 // start the server
+                replyFW = execCmd(String.format("setsid %s/%s >/dev/null 2>&1 </dev/null&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
                 reply = execCmd(String.format("%s/%s&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-                if (!reply.contains("SUCCESS"))
+                if (!reply.contains("SUCCESS") || !replyFW.contains("SUCCESS"))
                     return false;
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 10000) {
@@ -555,25 +561,46 @@ public class Device {
                 LOGGER.error("Failed to PING server");
                 return false;
             }
+            replyFW = sendMSG("PING_FW");
+            start = System.currentTimeMillis();
+            while (replyFW == null || !replyFW.contains("OKAY")) {
+                replyFW = sendMSG("PING_FW");
+                long timeout = System.currentTimeMillis() - start;
+                if (timeout > 10000) {
+                    return false;
+                }
+            }
         }
         return true;
     }
 
     private void restartServer() {
-        String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
-        if (processInfo != null && !processInfo.isEmpty()) {
-            execCmd("kill -9 " + processInfo);
-        }
+        killServer();
         startServer();
     }
 
-    private boolean isServerRunning() {
+    private void killServer() {
         String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
-        if (processInfo == null || processInfo.isEmpty()) {
-            processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE);
-            return !processInfo.isEmpty();
-        } else
-            return true;
+        while (processInfo != null && !processInfo.isEmpty()) {
+            execCmd("kill -9 " + processInfo);
+            processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
+        }
+        // check the framework component
+        processInfo = execCmd("pidof app_process");
+        while (processInfo != null && !processInfo.isEmpty()) {
+            execCmd("kill -9 " + processInfo);
+            processInfo = execCmd("pidof app_process");
+        }
+    }
+
+    private boolean isServerRunning() {
+        String processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE);
+        if (processInfo == null || processInfo.isEmpty())
+            return false;
+        else {
+            processInfo = execCmd("ps -A | grep app_process");
+            return processInfo != null && !processInfo.isEmpty();
+        }
     }
 
     /**
@@ -607,6 +634,7 @@ public class Device {
                 return null;
             Socket localSocket = new Socket(InetAddress.getLoopbackAddress(), localPort);
             DataOutputStream outputStream = new DataOutputStream(localSocket.getOutputStream());
+            data += MSG_END;
             outputStream.write(data.getBytes());
             outputStream.flush();
 
@@ -649,11 +677,11 @@ public class Device {
     public void setTargetPackage(String packageName) {
         endPerf();
         targetPackage = packageName;
-        String uidInfo = execCmd(String.format("dumpsys package %s| grep userId", packageName));
+        String uidInfo = execCmd(String.format("dumpsys package %s | grep userId", packageName));
         uidInfo = uidInfo.split("\\n")[0].strip();
         if (uidInfo.contains("userId=")) {
             try {
-                packageUid = Integer.parseInt(uidInfo.split("=")[1]);
+                targetPackageUid = Integer.parseInt(uidInfo.split("=")[1]);
             } catch (NumberFormatException e) {
                 LOGGER.error(e);
             }
@@ -665,7 +693,9 @@ public class Device {
         return targetPackage;
     }
 
-    public int getPackageUid() { return  packageUid; }
+    public int getTargetPackageUid() {
+        return targetPackageUid;
+    }
 
     public ArrayList<Layer> getLayers() {
         return layers;
