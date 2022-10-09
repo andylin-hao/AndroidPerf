@@ -1,0 +1,10 @@
+#!/system/bin/sh
+
+# Preload the native portion libhidcommand_jni.so to bypass the dependency
+# checks in the Java classloader, which prohibit dependencies that aren't
+# listed in system/core/rootdir/etc/public.libraries.android.txt.
+base=/data/local/tmp
+
+mkdir /data/local/tmp/dalvik-cache
+trap "" HUP
+ANDROID_DATA=$base app_process -Djava.class.path=$base/AndroidPerfServerFW.dex $base com.androidperf.server.AndroidPerfServerFW "$@"

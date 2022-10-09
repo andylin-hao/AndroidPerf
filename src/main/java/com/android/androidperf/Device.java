@@ -543,13 +543,13 @@ public class Device {
             }
 
             long start = System.currentTimeMillis();
-            while (!isServerRunning()) {
-                killServer();
+            while (true) {
                 // start the server
-                replyFW = execCmd(String.format("setsid %s/%s >/dev/null 2>&1 </dev/null&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
-                reply = execCmd(String.format("%s/%s&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-                if (!reply.contains("SUCCESS") || !replyFW.contains("SUCCESS"))
-                    return false;
+                killServer();
+                execCmd(String.format("setsid %s/%s >/dev/null 2>&1 </dev/null&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
+                execCmd(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
+                if (isServerRunning())
+                    break;
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 10000) {
                     return false;
@@ -558,13 +558,13 @@ public class Device {
 
             // PING server to test aliveness
             reply = new String(sendMSG("PING"));
-            if (reply == null || !reply.contains("OKAY")) {
+            if (!reply.contains("OKAY")) {
                 LOGGER.error("Failed to PING server");
                 return false;
             }
             replyFW = new String(sendMSG("PING_FW"));
             start = System.currentTimeMillis();
-            while (replyFW == null || !replyFW.contains("OKAY")) {
+            while (!replyFW.contains("OKAY")) {
                 replyFW = new String(sendMSG("PING_FW"));
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 10000) {
@@ -629,7 +629,7 @@ public class Device {
      * @param data data to be sent
      * @return reply message
      */
-    public byte[] sendMSG(String data) {
+    public synchronized byte[] sendMSG(String data) {
         try {
             if (localPort < 0 && !setupForward())
                 return null;
@@ -657,7 +657,6 @@ public class Device {
                     return ArrayUtils.toPrimitive(reply);
                 }
                 if (len == -1) {
-                    restartServer();
                     localSocket.close();
                     return null;
                 }

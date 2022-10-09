@@ -28,8 +28,10 @@ public class FPSPerfService extends BasePerfService {
         String latencyData;
 
         latencyData = new String(device.sendMSG(String.format("latency %s", layer.layerName)));
-        if (latencyData.isEmpty())
+        if (latencyData.isEmpty()) {
+            LOGGER.error("server is down");
             latencyData = device.execCmd(String.format("dumpsys SurfaceFlinger --latency '%s'", layer.layerName));
+        }
 
         if (latencyData.isEmpty())
             return new ArrayList<>();
