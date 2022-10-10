@@ -545,13 +545,16 @@ public class Device {
             long start = System.currentTimeMillis();
             while (true) {
                 // start the server
-                killServer();
-                execCmd(String.format("setsid %s/%s >/dev/null 2>&1 </dev/null&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
                 execCmd(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-                if (isServerRunning())
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    LOGGER.error(e);
+                }
+                if (isPrimaryServerRunning())
                     break;
                 long timeout = System.currentTimeMillis() - start;
-                if (timeout > 10000) {
+                if (timeout > 20000) {
                     return false;
                 }
             }
@@ -566,8 +569,13 @@ public class Device {
             start = System.currentTimeMillis();
             while (!replyFW.contains("OKAY")) {
                 replyFW = new String(sendMSG("PING_FW"));
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    LOGGER.error(e);
+                }
                 long timeout = System.currentTimeMillis() - start;
-                if (timeout > 10000) {
+                if (timeout > 20000 || replyFW.isEmpty()) {
                     return false;
                 }
             }
@@ -575,33 +583,41 @@ public class Device {
         return true;
     }
 
-    private void restartServer() {
-        killServer();
-        startServer();
-    }
-
     private void killServer() {
         String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
-        while (processInfo != null && !processInfo.isEmpty()) {
-            execCmd("kill -9 " + processInfo);
-            processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
+        if (processInfo != null && !processInfo.isEmpty()) {
+            String[] pids = processInfo.split(" ");
+            for (String pid: pids) {
+                execCmd("kill -9 " + pid);
+            }
         }
         // check the framework component
         processInfo = execCmd("pidof app_process");
-        while (processInfo != null && !processInfo.isEmpty()) {
-            execCmd("kill -9 " + processInfo);
-            processInfo = execCmd("pidof app_process");
+        if (processInfo != null && !processInfo.isEmpty()) {
+            String[] pids = processInfo.split(" ");
+            for (String pid: pids) {
+                execCmd("kill -9 " + pid);
+            }
         }
     }
 
     private boolean isServerRunning() {
-        String processInfo = execCmd("ps -A | grep " + SERVER_EXECUTABLE);
+        String checkPS = execCmd("ps -A");
+        boolean fullPSCapability = !checkPS.contains("bad");
+        String processInfo = execCmd(String.format("ps %s | grep " + SERVER_EXECUTABLE, fullPSCapability ? "-A" : ""));
         if (processInfo == null || processInfo.isEmpty())
             return false;
         else {
-            processInfo = execCmd("ps -A | grep app_process");
+            processInfo = execCmd(String.format("ps %s | grep app_process", fullPSCapability ? "-A" : ""));
             return processInfo != null && !processInfo.isEmpty();
         }
+    }
+
+    private boolean isPrimaryServerRunning() {
+        String checkPS = execCmd("ps -A");
+        boolean fullPSCapability = !checkPS.contains("bad");
+        String processInfo = execCmd(String.format("ps %s | grep " + SERVER_EXECUTABLE, fullPSCapability ? "-A" : ""));
+        return processInfo != null && !processInfo.isEmpty();
     }
 
     /**
@@ -634,6 +650,7 @@ public class Device {
             if (localPort < 0 && !setupForward())
                 return new byte[0];
             Socket localSocket = new Socket(InetAddress.getLoopbackAddress(), localPort);
+            localSocket.setSoTimeout(5000);
             DataOutputStream outputStream = new DataOutputStream(localSocket.getOutputStream());
             data += MSG_END;
             outputStream.write(data.getBytes());
@@ -663,7 +680,6 @@ public class Device {
             }
         } catch (IOException e) {
             LOGGER.error("Failed to send data to server, restarting...", e);
-            restartServer();
             return new byte[0];
         }
     }

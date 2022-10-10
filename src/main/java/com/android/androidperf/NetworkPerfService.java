@@ -66,6 +66,7 @@ public class NetworkPerfService extends BasePerfService {
     Pair<Double, Double> acquireNetworkData() {
         byte[] byteData = device.sendMSG(String.format("network %d", device.getTargetPackageUid()));
         NetStatsData netStatsData = fromBytes(byteData);
+        LOGGER.debug(String.format("rx %d %d, tx %d %d", netStatsData.mRxBytes, netStatsData.mRxPackets, netStatsData.mTxBytes, netStatsData.mTxPackets));
         return new Pair<>((double)netStatsData.mRxBytes/1024., (double)netStatsData.mTxBytes/1024.);
     }
 

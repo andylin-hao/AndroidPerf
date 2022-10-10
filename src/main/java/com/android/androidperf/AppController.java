@@ -3,6 +3,7 @@ package com.android.androidperf;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
@@ -205,25 +206,44 @@ public class AppController implements Initializable {
         selectedDevice = deviceMap.get(deviceID);
         if (selectedDevice == null)
             return;
-        if (!selectedDevice.startServer()) {
+
+        Dialog<String> dialog = new Dialog<>();
+        //Setting the title
+        dialog.setTitle("Connecting...");
+        dialog.setContentText("Waiting for AndroidPerf server");
+        Task<Boolean> task = new Task<>() {
+            @Override public Boolean call() {
+                return selectedDevice.startServer();
+            }
+        };
+
+        task.setOnRunning((e) -> dialog.show());
+        task.setOnSucceeded((e) -> {
+            Platform.runLater(() -> {
+                dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL);
+                dialog.close();
+                propTable.getItems().clear();
+
+                // initialize the package list
+                packageListBox.setItems(selectedDevice.getPackageList());
+
+                // initialize basic properties of the device
+                ArrayList<DeviceProp> props = selectedDevice.getProps();
+                ObservableList<DeviceProp> data = FXCollections.observableArrayList(props);
+                propTable.getItems().addAll(data);
+
+                // UI update
+                updateUIOnStateChanges();
+                packageListBox.setDisable(false);
+            });
+        });
+        task.setOnFailed((e) -> {
+            dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL);
+            dialog.close();
             MainApplication.alert("Cannot connect device, please retry!", Alert.AlertType.ERROR);
             Platform.runLater(()->deviceListBox.getSelectionModel().clearSelection());
-            return;
-        }
-
-        propTable.getItems().clear();
-
-        // initialize the package list
-        packageListBox.setItems(selectedDevice.getPackageList());
-
-        // initialize basic properties of the device
-        ArrayList<DeviceProp> props = selectedDevice.getProps();
-        ObservableList<DeviceProp> data = FXCollections.observableArrayList(props);
-        propTable.getItems().addAll(data);
-
-        // UI update
-        updateUIOnStateChanges();
-        packageListBox.setDisable(false);
+        });
+        new Thread(task).start();
     }
 
     private void refreshTask() {
