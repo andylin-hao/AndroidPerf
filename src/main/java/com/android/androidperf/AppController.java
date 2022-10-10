@@ -86,19 +86,10 @@ public class AppController implements Initializable {
     private void updateDeviceList() {
         try {
             List<JadbDevice> adbDevices = Device.connection.getDevices();
-            ArrayList<String> ids = new ArrayList<>();
-            ArrayList<String> obsoletes = new ArrayList<>();
-            for (JadbDevice adbDevice : adbDevices) {
-                ids.add(adbDevice.getSerial());
-                if (deviceMap.get(adbDevice.getSerial()) == null) {
-                    Device device = new Device(adbDevice, this);
-                    deviceListBox.getItems().add(device.getDeviceADBID());
-                    deviceMap.put(device.getDeviceADBID(), device);
-                }
+            ArrayList<String> obsoletes = new ArrayList<>(deviceListBox.getItems());
+            if (selectedDevice != null && selectedDevice.isDeviceAlive()) {
+                obsoletes.remove(selectedDevice.getDeviceADBID());
             }
-            deviceListBox.getItems().forEach(str -> {
-                if (!ids.contains(str)) obsoletes.add(str);
-            });
             obsoletes.forEach(str -> {
                 deviceListBox.getItems().remove(str);
                 Device device = deviceMap.get(str);
@@ -107,6 +98,13 @@ public class AppController implements Initializable {
                     deviceMap.remove(str);
                 }
             });
+            for (JadbDevice adbDevice : adbDevices) {
+                if (deviceMap.get(adbDevice.getSerial()) == null) {
+                    Device device = new Device(adbDevice, this);
+                    deviceListBox.getItems().add(device.getDeviceADBID());
+                    deviceMap.put(device.getDeviceADBID(), device);
+                }
+            }
         } catch (IOException | JadbException e) {
             LOGGER.error("Cannot get device list");
         }
@@ -292,6 +290,7 @@ public class AppController implements Initializable {
         if (selectedDevice != null) {
             selectedDevice.updatePackageList();
         } else {
+            packageListBox.getItems().clear();
             propTable.getItems().clear();
         }
     }
@@ -311,6 +310,10 @@ public class AppController implements Initializable {
             perfBtn.setText("End");
         } else {
             perfBtn.setText("Start");
+        }
+        if (!selectedDevice.isDeviceAlive()) {
+            handleUpdateBtn();
+            MainApplication.alert("Device is offline!", Alert.AlertType.ERROR);
         }
     }
 

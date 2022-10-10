@@ -468,6 +468,14 @@ public class Device {
         return children;
     }
 
+    public boolean isDeviceAlive() {
+        try {
+            return jadbDevice.getState() == JadbDevice.State.Device;
+        } catch (IOException | JadbException ex) {
+            return false;
+        }
+    }
+
     /**
      * Execute ADB command
      *
@@ -480,6 +488,7 @@ public class Device {
             return new String(stream.readAllBytes()).strip();
         } catch (IOException | JadbException e) {
             LOGGER.warn(String.format("Error executing adb cmd: %s", cmd + String.join(" ", args)));
+            endPerf();
             return "Error executing adb cmd";
         }
     }
@@ -551,7 +560,7 @@ public class Device {
                 } catch (InterruptedException e) {
                     LOGGER.error(e);
                 }
-                if (isPrimaryServerRunning())
+                if (isServerRunning())
                     break;
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 20000) {
@@ -599,6 +608,11 @@ public class Device {
                 execCmd("kill -9 " + pid);
             }
         }
+    }
+
+    private void restartServer() {
+        killServer();
+        startServer();
     }
 
     private boolean isServerRunning() {
@@ -680,6 +694,10 @@ public class Device {
             }
         } catch (IOException e) {
             LOGGER.error("Failed to send data to server, restarting...", e);
+            if (!isDeviceAlive())
+                endPerf();
+            else
+                restartServer();
             return new byte[0];
         }
     }
