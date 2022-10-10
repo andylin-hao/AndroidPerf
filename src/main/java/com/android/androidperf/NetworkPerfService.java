@@ -44,7 +44,7 @@ public class NetworkPerfService extends BasePerfService {
                 value = (value << 8) + (bytes[i] & 255);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.error(e);
         }
 
         return value;

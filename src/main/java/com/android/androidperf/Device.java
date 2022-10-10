@@ -632,7 +632,7 @@ public class Device {
     public synchronized byte[] sendMSG(String data) {
         try {
             if (localPort < 0 && !setupForward())
-                return null;
+                return new byte[0];
             Socket localSocket = new Socket(InetAddress.getLoopbackAddress(), localPort);
             DataOutputStream outputStream = new DataOutputStream(localSocket.getOutputStream());
             data += MSG_END;
@@ -658,13 +658,13 @@ public class Device {
                 }
                 if (len == -1) {
                     localSocket.close();
-                    return null;
+                    return new byte[0];
                 }
             }
         } catch (IOException e) {
             LOGGER.error("Failed to send data to server, restarting...", e);
             restartServer();
-            return null;
+            return new byte[0];
         }
     }
 
