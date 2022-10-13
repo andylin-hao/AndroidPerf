@@ -7,4 +7,4 @@ base=/data/local/tmp
 
 mkdir /data/local/tmp/dalvik-cache
 trap "" HUP
-ANDROID_DATA=$base app_process -Djava.class.path=$base/AndroidPerfServer.dex $base com.androidperf.server.AndroidPerfServer "$@"
+ANDROID_DATA=$base app_process -Djava.class.path=$base/AndroidPerfServerFW.dex $base com.androidperf.server.AndroidPerfServerFW "$@"
