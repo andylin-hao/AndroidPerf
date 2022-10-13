@@ -20,16 +20,6 @@ public class NetworkPerfService extends BasePerfService {
         public long mRxPackets = 0;
         public long mTxBytes = 0;
         public long mTxPackets = 0;
-
-        public byte[] toBytes() {
-            ByteBuffer buffer = ByteBuffer.allocate(32);
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-            buffer.putLong(0, mRxBytes);
-            buffer.putLong(8, mRxPackets);
-            buffer.putLong(16, mTxBytes);
-            buffer.putLong(24, mTxPackets);
-            return buffer.array();
-        }
     }
 
     static long convertToLong(byte[] bytes, int index)

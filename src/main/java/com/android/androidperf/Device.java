@@ -56,7 +56,7 @@ public class Device {
 
     private static final String SERVER_PATH_BASE = "/data/local/tmp";
     private static final String SERVER_EXECUTABLE = "AndroidPerfServer";
-    private static final String SERVER_FW_EXECUTABLE = "AndroidPerfServerFW";
+    private static final String SERVER_LIB = "libandroidperf.so";
     private static final String MSG_END = "PERF_MSG_END\n";
     private static final String UNIX_SOCKET = "AndroidPerf";
     private static final Pattern cpuModelPattern = Pattern.compile("model name\\s*:\\s*(.*)");
@@ -75,6 +75,8 @@ public class Device {
         jadbDevice = device;
         controller = appController;
         deviceADBID = jadbDevice.getSerial();
+
+        killServer();
 
         // register perf services
         registerService(FPSPerfService.class);
@@ -535,9 +537,9 @@ public class Device {
                 abi = abiList.contains("x86_64") ? "x86_64" :
                         (abiList.contains("x86") ? "x86" :
                                 (abiList.contains("arm64-v8a") ? "arm64-v8a" : abi));
-                jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
-                jadbDevice.push(new File(String.format("android/%s", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
-                jadbDevice.push(new File(String.format("android/%s.dex", SERVER_FW_EXECUTABLE)), new RemoteFile(String.format("%s/%s.dex", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE)));
+                jadbDevice.push(new File(String.format("android/%s/%s", abi, SERVER_LIB)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_LIB)));
+                jadbDevice.push(new File(String.format("android/%s", SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
+                jadbDevice.push(new File(String.format("android/%s.dex", SERVER_EXECUTABLE)), new RemoteFile(String.format("%s/%s.dex", SERVER_PATH_BASE, SERVER_EXECUTABLE)));
             } catch (IOException | JadbException e) {
                 LOGGER.error("Failed to push server to device", e);
                 return false;
@@ -545,23 +547,20 @@ public class Device {
 
             // grant permissions
             String reply = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
-            String replyFW = execCmd(String.format("chmod 777 %s/%s", SERVER_PATH_BASE, SERVER_FW_EXECUTABLE));
-            if (reply.contains("Error") || replyFW.contains("Error")) {
+            if (reply.contains("Error")) {
                 LOGGER.error("Failed to chmod");
                 return false;
             }
 
             long start = System.currentTimeMillis();
-            while (true) {
+            while (!isServerRunning()) {
                 // start the server
-                execCmd(String.format("%s/%s", SERVER_PATH_BASE, SERVER_EXECUTABLE));
+                execCmd(String.format("setsid %s/%s >/dev/null 2>&1 < /dev/null&echo 'SUCCESS'", SERVER_PATH_BASE, SERVER_EXECUTABLE));
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     LOGGER.error(e);
                 }
-                if (isServerRunning())
-                    break;
                 long timeout = System.currentTimeMillis() - start;
                 if (timeout > 20000) {
                     return false;
@@ -574,34 +573,12 @@ public class Device {
                 LOGGER.error("Failed to PING server");
                 return false;
             }
-            replyFW = new String(sendMSG("PING_FW"));
-            start = System.currentTimeMillis();
-            while (!replyFW.contains("OKAY")) {
-                replyFW = new String(sendMSG("PING_FW"));
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    LOGGER.error(e);
-                }
-                long timeout = System.currentTimeMillis() - start;
-                if (timeout > 20000 || replyFW.isEmpty()) {
-                    return false;
-                }
-            }
         }
         return true;
     }
 
     private void killServer() {
         String processInfo = execCmd("pidof " + SERVER_EXECUTABLE);
-        if (processInfo != null && !processInfo.isEmpty()) {
-            String[] pids = processInfo.split(" ");
-            for (String pid: pids) {
-                execCmd("kill -9 " + pid);
-            }
-        }
-        // check the framework component
-        processInfo = execCmd("pidof app_process");
         if (processInfo != null && !processInfo.isEmpty()) {
             String[] pids = processInfo.split(" ");
             for (String pid: pids) {
@@ -616,18 +593,6 @@ public class Device {
     }
 
     private boolean isServerRunning() {
-        String checkPS = execCmd("ps -A");
-        boolean fullPSCapability = !checkPS.contains("bad");
-        String processInfo = execCmd(String.format("ps %s | grep " + SERVER_EXECUTABLE, fullPSCapability ? "-A" : ""));
-        if (processInfo == null || processInfo.isEmpty())
-            return false;
-        else {
-            processInfo = execCmd(String.format("ps %s | grep app_process", fullPSCapability ? "-A" : ""));
-            return processInfo != null && !processInfo.isEmpty();
-        }
-    }
-
-    private boolean isPrimaryServerRunning() {
         String checkPS = execCmd("ps -A");
         boolean fullPSCapability = !checkPS.contains("bad");
         String processInfo = execCmd(String.format("ps %s | grep " + SERVER_EXECUTABLE, fullPSCapability ? "-A" : ""));
