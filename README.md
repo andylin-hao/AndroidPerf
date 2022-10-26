@@ -1,5 +1,8 @@
 # AndroidPerf
 
+<img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
+<img src=https://github.com/andylin-hao/AndroidPerf/actions/workflows/maven-publish.yml/badge.svg>
+
 AndroidPerf is a tool for profiling your Android devices.
 It supports accurate and efficient measurement of Android apps' running smoothness (FPS), CPU usages and network traffic.
 
