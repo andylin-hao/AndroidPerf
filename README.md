@@ -8,6 +8,8 @@ It supports accurate and efficient measurement of Android apps' running smoothne
 Our tests show that AndroidPerf provides more accurate FPS measurement on video streaming apps as compared to Solopi and PerfDog.
 For example, Solopi cannot accurately measure almost all streaming apps, while PerfDog cannot handle overlay-based video playing.
 
+The server part is [here](https://github.com/andylin-hao/AndroidPerfServer).
+
 ## Platforms
 
 AndroidPerf runs on Windows/Linux/macOS computers to which your phones are connected.
