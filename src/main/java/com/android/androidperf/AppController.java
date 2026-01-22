@@ -32,7 +32,7 @@ public class AppController implements Initializable {
     @FXML
     private ComboBox<String> deviceListBox;
     @FXML
-    private ComboBox<String> packageListBox;
+    private ComboBox<String> AppListBox;
     @FXML
     private TableView<DeviceProp> propTable;
     @FXML
@@ -48,6 +48,11 @@ public class AppController implements Initializable {
     public Device selectedDevice;
     private final HashMap<String, Device> deviceMap = new HashMap<>();
     private final ScheduledExecutorService executorService = Executors.newScheduledThreadPool(1);
+
+    private ObservableList<String> packageList;
+    private ObservableList<String> AppList = FXCollections.observableArrayList();
+    private HashMap<String, String> packageToApp = new HashMap<>();
+    private HashMap<String, String> AppToPackage = new HashMap<>();
 
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
@@ -77,7 +82,7 @@ public class AppController implements Initializable {
 
         // UI update
         updateUIOnStateChanges();
-        packageListBox.setDisable(true);
+        AppListBox.setDisable(true);
 
         // activate auto refresh task
         executorService.scheduleAtFixedRate(this::refreshTask, 500, 500, TimeUnit.MILLISECONDS);
@@ -197,6 +202,27 @@ public class AppController implements Initializable {
         }
     }
 
+    public void updateConversionHashMap() {
+        packageToApp.clear();
+        AppToPackage.clear();
+        for (String packageName: packageList
+             ) {
+            String AppName = new String(selectedDevice.sendMSG("convert "+packageName));
+            LOGGER.debug(AppName);
+            packageToApp.put(packageName, AppName);
+            AppToPackage.put(AppName, packageName);
+        }
+    }
+
+    public void updateAppList() {
+        AppList.clear();
+        updateConversionHashMap();
+        for (String packageName: packageList
+             ) {
+            AppList.add(packageToApp.get(packageName));
+        }
+    }
+
     public void handleDeviceListBox() {
         if (selectedDevice != null)
             selectedDevice.endPerf();
@@ -222,8 +248,10 @@ public class AppController implements Initializable {
                 dialog.close();
                 propTable.getItems().clear();
 
-                // initialize the package list
-                packageListBox.setItems(selectedDevice.getPackageList());
+                // initialize the package list and the App list
+                packageList = selectedDevice.getPackageList();
+                updateAppList();
+                AppListBox.setItems(AppList);
 
                 // initialize basic properties of the device
                 ArrayList<DeviceProp> props = selectedDevice.getProps();
@@ -232,7 +260,7 @@ public class AppController implements Initializable {
 
                 // UI update
                 updateUIOnStateChanges();
-                packageListBox.setDisable(false);
+                AppListBox.setDisable(false);
             });
         });
         task.setOnFailed((e) -> {
@@ -250,27 +278,28 @@ public class AppController implements Initializable {
         }
     }
 
-    public void movePackageToFront(String packageName) {
-        EventHandler<ActionEvent> handler = packageListBox.getOnAction();
-        packageListBox.setOnAction(null);
-        String selected = packageListBox.getSelectionModel().getSelectedItem();
-        var packageList = selectedDevice.getPackageList();
+    public void moveAppToFront(String packageName) {
+        EventHandler<ActionEvent> handler = AppListBox.getOnAction();
+        AppListBox.setOnAction(null);
+        String selectedApp = AppListBox.getSelectionModel().getSelectedItem();
+        packageList = selectedDevice.getPackageList();
         packageList.remove(packageName);
         packageList.add(0, packageName);
-        if (selected != null) {
-            packageListBox.getSelectionModel().select(selected);
-            packageListBox.setValue(selected);
+        updateAppList();
+        if (selectedApp != null) {
+            AppListBox.getSelectionModel().select(selectedApp);
+            AppListBox.setValue(selectedApp);
         }
-        packageListBox.setOnAction(handler);
+        AppListBox.setOnAction(handler);
     }
 
-    public void handlePackageListBox() {
-        String packageName = packageListBox.getSelectionModel().getSelectedItem();
-        if (packageName == null || packageName.length() == 0) {
+    public void handleAppListBox() {
+        String AppName = AppListBox.getSelectionModel().getSelectedItem();
+        if (AppName == null || AppName.length() == 0) {
             selectedDevice.endPerf();
             return;
         }
-        selectedDevice.setTargetPackage(packageName);
+        selectedDevice.setTargetPackage(AppToPackage.get(AppName));
 
         // UI update
         updateUIOnStateChanges();
@@ -290,7 +319,7 @@ public class AppController implements Initializable {
         if (selectedDevice != null) {
             selectedDevice.updatePackageList();
         } else {
-            packageListBox.getItems().clear();
+            AppListBox.getItems().clear();
             propTable.getItems().clear();
         }
     }
@@ -300,7 +329,7 @@ public class AppController implements Initializable {
             if (selectedDevice == null) {
                 deviceListBox.setPromptText("Select connected devices");
             }
-            packageListBox.setPromptText("Select target package");
+            AppListBox.setPromptText("Select target App");
             perfBtn.setDisable(true);
             perfBtn.setText("Start");
             return;

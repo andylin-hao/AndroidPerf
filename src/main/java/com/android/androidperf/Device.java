@@ -320,7 +320,7 @@ public class Device {
         String packageName = packageInfo[0];
         if (packageInfo.length == 2 && !packageList.get(0).equals(packageName)) {
             Platform.runLater(() -> {
-                controller.movePackageToFront(packageName);
+                controller.moveAppToFront(packageName);
             });
         }
     }
